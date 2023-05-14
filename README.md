@@ -18,8 +18,8 @@ To download the program to your local PC environment:
 2. On a *second* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
 3. `cd ~/catkin_ws/src` and run `catkin_create_pkg cs81-final-project std_msgs rospy` to create a new catkin package with the necessary dependencies
 4. `cd ~/catkin_ws` and run `catkin_make` to update the packages in the catkin workspace
-5. Copy the contents of this repository into the `~/catkin_ws/src/pa4` directory
-6. `chmod +x pa4_map_planning.py` to grant the Python file executable permissions
+5. Copy the contents of this repository into the `~/catkin_ws/src/cs81-final-project` directory
+6. `chmod +x robot_dog.py` to grant the Python file executable permissions
 7. `apt-get install ros-melodic-nav2d-tutorials` to install the 2D simulator
 8. Run `sudo apt-get install ros-melodic-rviz`
 
@@ -48,8 +48,7 @@ To run the program locally on the PC:
 These setup instructions assume that you are using one of the Turtlebot 3 robots provided by Prof. Li. 
 Let # be the id of the robot you are using; this will be used in the instructions below.
 
-First and foremost, make sure to change the laser scan topic name in the code to `scan` (on both files.)
-Also, make sure to change the base laser link topic to `base_scan` (just on `pa4_p2.py`)
+First and foremost, make sure to change the laser scan topic name in the code to `scan` and the base laser link topic to `base_scan`.
 
 To download the program to the robot:
 1. `ssh dartmouth@192.168.111.11`
@@ -68,7 +67,7 @@ To run the program on the robot:
 3. Run `roslaunch turtlebot3_bringup turtlebot3_robot.launch`
 4. Ctrl b + d to exit the first tmux terminal
 5. Open *second* tmux terminal with `tmux`
-6. `cd ~/catkin_ws/src/elu_pa4/src/`
+6. `cd ~/catkin_ws/src/cs81-final-project/src/`
 7. Start running the robot:
     - To run pre-determined motion (mostly for simulation): `rosrun cs81_final_project robot_dog.py 1`
     - To let all motion be determined from the command line: `rosrun cs81_final_project  robot_dog.py 2`
