@@ -1,4 +1,4 @@
-# README.md - CS77 Final Project
+# README.md - CS81 Final Project
 
 This programming assignment
 
@@ -16,7 +16,7 @@ To download the program to your local PC environment:
 
 1. Navigate to your ROS dev directory and run `docker-compose up --build`
 2. On a *second* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
-3. `cd ~/catkin_ws/src` and run `catkin_create_pkg cs77-final-project std_msgs rospy` to create a new catkin package with the necessary dependencies
+3. `cd ~/catkin_ws/src` and run `catkin_create_pkg cs81-final-project std_msgs rospy` to create a new catkin package with the necessary dependencies
 4. `cd ~/catkin_ws` and run `catkin_make` to update the packages in the catkin workspace
 5. Copy the contents of this repository into the `~/catkin_ws/src/pa4` directory
 6. `chmod +x pa4_map_planning.py` to grant the Python file executable permissions
@@ -38,8 +38,8 @@ To run the program locally on the PC:
 11. In the sidebar, click add > by topic > /map > set topic to `/map` 
 12. On a *fifth* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
 13. `cd ~/catkin_ws/src` and choose one of the following:
-    - To run pre-determined motion (mostly for simulation): `rosrun cs77_final_project robot_dog.py 1`
-    - To let all motion be determined from the command line: `rosrun cs77_final_project  robot_dog.py 2`
+    - To run pre-determined motion (mostly for simulation): `rosrun cs81_final_project robot_dog.py 1`
+    - To let all motion be determined from the command line: `rosrun cs81_final_project  robot_dog.py 2`
 14. The robot should now be moving in the VNC viewer on the browser, and there should also be a OccupancyGrid mapping in the rviz.
     - To see the OccupancyGrid mapping, you may need to zoom out focal point (on the right sidebar in rviz)
 
@@ -55,10 +55,10 @@ To download the program to the robot:
 1. `ssh dartmouth@192.168.111.11`
    - password: `Robotics&7`
 2. `sudo apt-get install tmux` if the robot does not already have tmux
-3. `cd ~/catkin_ws/src` and run `catkin_create_pkg cs77-final-project std_msgs rospy` to create a new catkin package with the necessary dependencies
+3. `cd ~/catkin_ws/src` and run `catkin_create_pkg cs81-final-project std_msgs rospy` to create a new catkin package with the necessary dependencies
 4. `cd ~/catkin_ws` and run `catkin_make` to update the packages in the catkin workspace
 5. On a *second* terminal, navigate to the directory that contains the file `robot_dog.py`
-6. Copy over files to robot with `scp -r robot_dog.py dartmouth@192.168.111.11:~/catkin_ws/src/cs77-final-project/src`
+6. Copy over files to robot with `scp -r robot_dog.py dartmouth@192.168.111.11:~/catkin_ws/src/cs81-final-project/src`
    - password: `Robotics&7`
 
 To run the program on the robot:
@@ -70,8 +70,8 @@ To run the program on the robot:
 5. Open *second* tmux terminal with `tmux`
 6. `cd ~/catkin_ws/src/elu_pa4/src/`
 7. Start running the robot:
-    - To run pre-determined motion (mostly for simulation): `rosrun cs77_final_project robot_dog.py 1`
-    - To let all motion be determined from the command line: `rosrun cs77_final_project  robot_dog.py 2`
+    - To run pre-determined motion (mostly for simulation): `rosrun cs81_final_project robot_dog.py 1`
+    - To let all motion be determined from the command line: `rosrun cs81_final_project  robot_dog.py 2`
 
 Note that to open teleoperation, run `rosrun turtlebot3_teleop turtlebot3_teleop_key` from a new terminal connected to `ssh dartmouth@192.168.111.11`
 
