@@ -51,6 +51,7 @@ Let # be the id of the robot you are using; this will be used in the instruction
 First and foremost, make sure to change the laser scan topic name in the code to `scan` and the base laser link topic to `base_scan`.
 
 To download the program to the robot:
+
 1. `ssh dartmouth@192.168.111.11`
    - password: `Robotics&7`
 2. `sudo apt-get install tmux` if the robot does not already have tmux
@@ -61,6 +62,7 @@ To download the program to the robot:
    - password: `Robotics&7`
 
 To run the program on the robot:
+
 1. `ssh dartmouth@192.168.111.11`
    - password: `Robotics&7`
 2. Open *first* tmux terminal with `tmux`
@@ -75,6 +77,7 @@ To run the program on the robot:
 Note that to open teleoperation, run `rosrun turtlebot3_teleop turtlebot3_teleop_key` from a new terminal connected to `ssh dartmouth@192.168.111.11`
 
 To access `rviz` while running the program on the robot:
+
 1. Navigate to your ROS development directory and run `docker-compose up --build`
 2. On a *second* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
 3. Run `export ROS_MASTER_URI=http://192.168.111.11:11311`

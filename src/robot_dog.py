@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# type: ignore (ignore missing imports for rospy, tf, etc.)
 # The line above is important so that this file is interpreted with Python when running it.
 
 # Authors: Eric Lu, Jordan Kirkbride, Julian Wu, Wendell Wu
@@ -15,7 +16,6 @@ import sys
 import rospy  # module for ROS APIs
 from geometry_msgs.msg import Twist  # message type for cmd_vel
 from sensor_msgs.msg import LaserScan  # message type for scan
-from std_srvs.srv import Trigger, TriggerResponse
 from nav_msgs.msg import Odometry
 import tf  # library for transformations.
 from nav_msgs.msg import OccupancyGrid
@@ -47,48 +47,65 @@ WIDTH = 500  # m
 HEIGHT = 500  # m
 
 
+"""A class representing the occupancy grid map. Taken from my PA3 Code, and
+added more functionality to enable publishing/manipulation."""
 class Grid:
-    """
-    Constructor
-    """
-    def __init__(self, width, height, resolution, origin):
-        self.grid = numpy.full([height, width], OCCUPANCY_GRID_UNKNOWN)
-        self.resolution = resolution
-        self.origin = origin
-        self.width = width
-        self.height = height
+	def __init__(self, width, height, resolution, origin):
+		"""Initialize an empty map grid with everything
+		marked as -1 (unknown) message."""
+		# turn the grid's occupancy data into a numpy array of the correct
+		# dimensions
+		self.grid = np.full((height, width), -1)
+		self.width = width # width of the map in cells
+		self.height = height # height of the map in cells
+		self.resolution = resolution # resolution of the map in meters/cell
+		self.originPose = origin # origin of the grid in map, a pose object
+		self.wallsExpanded = False # turns true after calling expandWalls()
+	
+	def getOccupancyGridMsg(self):
+		"""Return the occupancy grid as a ROS OccupancyGrid message."""
+		# create the message
+		msg = OccupancyGrid()
 
-    """
-    Determines the probability (in range [0, 100]) that coordinate 
-    (x, y) in the grid is occupied, or -1 if it is unseen.
+		# fill in the metadata
+		msg.header = Header()
+		msg.header.stamp = rospy.Time.now()
+		# our map's base frame is actually odom, not map
+		msg.header.frame_id = DEFAULT_ODOM_FRAME
 
-    Args:
-        x: x coordinate in the grid reference frame
-        y: y coordinate in the grid reference frame
-    Returns:
-        Probability (in range [0, 100]) that coordinate (x, y) in the grid is occupied, or -1 if it is unseen.
-    """
-    def cell_at(self, x, y):
-        return self.grid[y, x]
+		msg.info = MapMetaData()
+		msg.info.width = self.width
+		msg.info.height = self.height
+		msg.info.resolution = self.resolution
+		msg.info.origin = self.originPose
 
-    """
-    Edits the probability (in range [0, 100]) that coordinate (x, y) in the grid is occupied
+		# convert the grid to a 1D array and fill in the data
+		# row-major order (C-style, which is the default for numpy and the
+		# OccupancyGrid message's expected format)
+		msg.data = self.grid.flatten()
 
-    Args:
-        x: x coordinate in the grid reference frame
-        y: y coordinate in the grid reference frame
-        new_probability: new probability, in range [0, 100]
-    Returns:
-        Nothing
-    Throws:
-        Exception: Throws error if new probability is not in range [0, 100]
-    """
-    def edit_cell_at(self, x, y, new_probability):
-        if new_probability < OCCUPANCY_GRID_MIN_PROBABILITY or new_probability > OCCUPANCY_GRID_MAX_PROBABILITY:
-            raise Exception('invalid probability')
+		return msg
 
-        self.grid[y, x] = new_probability
-
+	def cellAt(self, x, y):
+		"""Returns the value of the cell at the given coordinates."""
+		# assume row-major order
+		return self.grid[y, x]
+	
+	def setCellAt(self, x, y, value):
+		"""
+		Sets the value of the cell at the given coordinates.
+		Values:
+		- 0: free
+		- 100: occupied
+		- -1: unknown
+		"""
+		self.grid[y, x] = value
+	
+	def getGridCoordinates(self, x, y):
+		"""Converts from continuous world coordinates to grid coordinates."""
+		# first offset by the origin of the grid, then divide by resolution
+		return (int((x - self.originPose.position.x) / self.resolution),\
+	  		int((y - self.originPose.position.y) / self.resolution))
 
 class RobotDog():
     def __init__(self, mode, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY):

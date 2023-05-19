@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #The line above is important so that this file is interpreted with Python when running it.
 
-# Author's: Jordan, Eric, Wendall, Julian
+# Authors: Jordan, Eric, Wendall, Julian
 # CS81/281 FP3
 
 
