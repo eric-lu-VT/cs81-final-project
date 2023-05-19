@@ -218,15 +218,122 @@ class RobotDog():
         self.yaw = yaw
 
     """
-    LaserScan callback function; updates the OccupancyGrid based on the LIDAR information
+       LaserScan callback function; updates the OccupancyGrid based on the LIDAR information
+
+       Args:
+           msg: LaserScan.msg
+       Returns:
+           Nothing
+       """
+
+    def _laser_callback(self, msg):
+        if not self.is_rotating:
+            """Processing of laser message."""
+            mox = self.map.origin.orientation.x
+            moy = self.map.origin.orientation.y
+            moz = self.map.origin.orientation.z
+            mow = self.map.origin.orientation.w
+            (map_roll, map_pitch, map_yaw) = tf.transformations.euler_from_quaternion([mox, moy, moz, mow])
+            grid_T_odom = numpy.matrix([
+                [math.cos(map_yaw), -math.sin(map_yaw), 0, WIDTH / 2],  # Make it so that OccupancyGrid
+                [math.sin(map_yaw), math.cos(map_yaw), 0, HEIGHT / 2],  # is not just first quadrant
+                [0, 0, 1, self.map.origin.position.z],
+                [0, 0, 0, 1]
+            ])
+
+            (trans, rot) = self.listener.lookupTransform(ODOM_TOPIC, BLL_TOPIC, rospy.Time(0))
+            t = tf.transformations.translation_matrix(trans)
+            R = tf.transformations.quaternion_matrix(rot)
+            odom_T_bll = t.dot(R)
+
+            bot_pt_grid = grid_T_odom.dot(numpy.transpose([self.x, self.y, 0, self.map.resolution])) * (
+                        1 / self.map.resolution)
+            bot_x_grid = numpy.ceil(bot_pt_grid.item(0, 0)).astype(int)
+            bot_y_grid = numpy.ceil(bot_pt_grid.item(0, 1)).astype(int)
+
+            # First update the wall positions...
+            for i, r in enumerate(msg.ranges):
+                angle = msg.angle_min + msg.angle_increment * i
+                obj_x_bll = r * numpy.cos(angle)
+                obj_y_bll = r * numpy.sin(angle)
+
+                obj_pt_odom = odom_T_bll.dot(numpy.transpose([obj_x_bll, obj_y_bll, 0, 1]))
+                obj_x_odom = obj_pt_odom.item(0)
+                obj_y_odom = obj_pt_odom.item(1)
+
+                obj_pt_grid = grid_T_odom.dot(numpy.transpose([obj_x_odom, obj_y_odom, 0, self.map.resolution])) * (
+                            1 / self.map.resolution)
+                obj_x_grid = numpy.ceil(obj_pt_grid.item(0, 0)).astype(int)
+                obj_y_grid = numpy.ceil(obj_pt_grid.item(0, 1)).astype(int)
+                if 0 <= obj_y_grid < len(self.map.grid) and 0 <= obj_x_grid < len(self.map.grid[0]):
+                    self.map.edit_cell_at(obj_x_grid, obj_y_grid, OCCUPANCY_GRID_MAX_PROBABILITY)
+
+            # THEN ray trace
+            # The wall positions need to already be set so that the rays can terminate early if needed
+            for i, r in enumerate(msg.ranges):
+                angle = msg.angle_min + msg.angle_increment * i
+                obj_x_bll = r * numpy.cos(angle)
+                obj_y_bll = r * numpy.sin(angle)
+
+                obj_pt_odom = odom_T_bll.dot(numpy.transpose([obj_x_bll, obj_y_bll, 0, 1]))
+                obj_x_odom = obj_pt_odom.item(0)
+                obj_y_odom = obj_pt_odom.item(1)
+
+                obj_pt_grid = grid_T_odom.dot(numpy.transpose([obj_x_odom, obj_y_odom, 0, self.map.resolution])) * (
+                            1 / self.map.resolution)
+                obj_x_grid = numpy.ceil(obj_pt_grid.item(0, 0)).astype(int)
+                obj_y_grid = numpy.ceil(obj_pt_grid.item(0, 1)).astype(int)
+                if 0 <= obj_y_grid < len(self.map.grid) and 0 <= obj_x_grid < len(self.map.grid[0]):
+                    points = self.ray_tracing(bot_x_grid, bot_y_grid, obj_x_grid, obj_y_grid)
+
+                    for (x, y) in points:
+                        if 0 <= y < len(self.map.grid) and 0 <= x < len(self.map.grid[0]):
+                            # Ray stops early if it hits a wall
+                            if self.map.cell_at(x, y) == OCCUPANCY_GRID_MAX_PROBABILITY:
+                                break
+                            self.map.edit_cell_at(x, y, OCCUPANCY_GRID_MIN_PROBABILITY)
+
+            grid_msg = OccupancyGrid()
+            grid_msg.header.stamp = rospy.Time.now()
+            grid_msg.header.frame_id = ODOM_TOPIC  # TODO: Should be odom topic
+            grid_msg.info.map_load_time = rospy.Time.now()
+            grid_msg.info.resolution = self.map.resolution
+            grid_msg.info.width = self.map.width
+            grid_msg.info.height = self.map.height
+            grid_msg.info.origin = self.map.origin
+            grid_msg.data = self.map.grid.flatten()
+            self._occupancy_grid_pub.publish(grid_msg)
+
+    """
+    Calculates (by brute force) the integer points from (x1, y1) to (x2, y2)
 
     Args:
-        msg: LaserScan.msg
+        x1: x coordinate of start point
+        y1: y coordinate of start point
+        x2: x coordinate of end point
+        y2: y coordinate of end point
+
     Returns:
-        Nothing
+        List of points, in (x, y) format, from (x1, y1) to (x2, y2)
     """
-    def _laser_callback(self, msg):
-        print(msg)
+    def ray_tracing(self, x1, y1, x2, y2):
+        points = []
+
+        dx = x2 - x1
+        dy = y2 - y1
+        if dx != 0:  # Account for divide by 0 possibility
+            m = dy / dx
+            c = y1 - m * x1
+            if x1 <= x2:  # Left to right
+                for x in range(x1, x2 + 1):
+                    y = m * x + c
+                    points.append((x, y))
+            else:  # Right to left
+                for x in range(x1, x2 - 1, -1):
+                    y = m * x + c
+                    points.append((x, y))
+
+        return points
 
     """
     Class main function
