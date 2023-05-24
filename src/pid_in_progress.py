@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 #The line above is important so that this file is interpreted with Python when running it.
 
-# Authors: Jordan, Eric, Wendall, Julian
-# CS81/281 FP3
-
+# Author: Jordan Kirkbride '23: Code adapted from Professor Alberto's provided code from pa0 and pa1
+# Date Due: 04/21/2023
 
 # Import of python modules.
 import math # use of pi.
@@ -46,17 +45,17 @@ class FollowWall():
         self.odometry_theta = 0
         
         # Variables for the pd controller
-        self.kp = 1
-        self.kd = 2
-        self.desired_distance = .5
-        self.current_error = 0
-        self.prev_error = 0
+        self.kp = 2
+        self.kd = 1
+        self.current_distance_error = 1000
+        self.prev_distance_error = 0
 
-        # Hold for closest points of right and front of robot to the wall
-        self.min_distance_right = 10000
-        self.min_distance_front = 10000
+        self.ball_x = 9
+        self.ball_y = 9
+        self.reached_ball = False
+        self.threshold_distance = .2
+        self.prev_angle_difference = 0
 
-        
 
     def move(self, linear_vel, angular_vel):
         """Send a velocity command (linear vel in m/s, angular vel in rad/s)."""
@@ -74,43 +73,66 @@ class FollowWall():
 
     def _laser_callback(self, msg):
         """Processing of laser message."""
-       
-        # Accounts for front half of the robot, finds closest point in front of robot to the wall
-        front_min_angle = -math.pi/4
-        front_max_angle = math.pi/4
-        front_min_index = int((front_min_angle - msg.angle_min) / msg.angle_increment)
-        front_max_index = int((front_max_angle - msg.angle_min) / msg.angle_increment)
-        front_half = msg.ranges[front_min_index:front_max_index+1]
-        self.min_distance_front = min(front_half)
 
-        if self.min_distance_front < self.desired_distance: # About to crash from the front, stop and turn
-            self.stop()
-            self.move(0, math.pi/4)
-        else: # Not at goal, calculate error and update angular velocity
-            right_min_angle = -math.pi
-            right_max_angle = 0
-            right_min_index = int((right_min_angle - msg.angle_min) / msg.angle_increment)
-            right_max_index = int((right_max_angle - msg.angle_min) / msg.angle_increment)
-            right_half = msg.ranges[right_min_index:right_max_index+1]
-            self.min_distance_right = min(right_half)
-            error = self.desired_distance - self.min_distance_right
-            self.pd_controller(error, self.linear_velocity)
+        # Travel to the ball if not already there
+        if not self.reached_ball:
+            x_error = self.ball_x - self.odometry_x
+            y_error = self.ball_y - self.odometry_y
+            print("x_error:", x_error)
+            print("y_error:", y_error)
+
+            distance_to_goal = math.sqrt(x_error**2 + y_error**2)
             
+            if distance_to_goal < self.threshold_distance: # we have arrived at the ball
+                self.reached_ball = True
+                #self.goal_position = (self.odometry_x + self.goal_offset, self.odometry_y)  # Set the goal position in front of the robot
+                self.stop()
+                print("BALL REACHED")
+            else:
+                self.pd_controller(x_error, y_error, self.linear_velocity)
+        else:
+            x_error = 0 - self.odometry_x
+            y_error = 0 - self.odometry_y
+            print("x_error:", x_error)
+            print("y_error:", y_error)
+
+            distance_to_goal = math.sqrt(x_error**2 + y_error**2)
+            
+            if distance_to_goal < self.threshold_distance: # we have arrived at the ball
+                self.reached_ball = True
+                #self.goal_position = (self.odometry_x + self.goal_offset, self.odometry_y)  # Set the goal position in front of the robot
+                self.stop()
+            else:
+                self.pd_controller(x_error, y_error, self.linear_velocity)
+
+    def pd_controller(self, x_error, y_error, linear_velocity):
+        # Calculate angle to the goal position
+        target_angle = math.atan2(y_error, x_error)
+
+        # Calculate current robot orientation
+        current_angle = self.odometry_theta
+
+        # Calculate the angle difference
+        angle_difference = target_angle - current_angle
+
+        # Normalize the angle difference to the range [-pi, pi]
+        while angle_difference > math.pi:
+            angle_difference -= 2 * math.pi
+        while angle_difference < -math.pi:
+            angle_difference += 2 * math.pi
+
+        # Update the angular velocity based on the angle difference
+        w = self.kp * angle_difference + self.kd * ((angle_difference - self.prev_angle_difference) / 0.02)
+        self.prev_angle_difference = angle_difference
+
+        # Move the robot forward with the given linear velocity and calculated angular velocity
+        self.move(linear_velocity, w)
+    
     def odom_callback(self, msg):
         # Get x, y from odom and calculate theta
         self.odometry_x = msg.pose.pose.position.x
         self.odometry_y = msg.pose.pose.position.y
         self.odometry_theta = tf.euler_from_quaternion([msg.pose.pose.orientation.x,msg.pose.pose.orientation.y,msg.pose.pose.orientation.z,msg.pose.pose.orientation.w])[2]
-
-    def pd_controller(self, current_error, linear_velocity):
-    
-        # Calculate error and update angular velocity
-        self.prev_error = self.current_error
-        self.current_error = current_error
-        error_distance =  self.desired_distance - self.min_distance_right
-        w = self.kp * error_distance + (self.kd*((self.current_error-self.prev_error)/.02)) 
-        self.move(linear_velocity, w)
-
 
     def spin(self):
         rate = rospy.Rate(FREQUENCY) # loop at 10 Hz.
