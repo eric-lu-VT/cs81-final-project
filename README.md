@@ -32,6 +32,7 @@ To run the program locally on the PC:
 5. On a *third* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
 6. `cd ~/catkin_ws/src` and run `rosrun stage_ros stageros /opt/ros/melodic/share/nav2d_tutorials/world/tutorial.world`
    - Or `rosrun stage_ros stageros ~/catkin_ws/pa1/PA1.world`
+   - Or `rosrun stage_ros stageros ~/catkin_ws/pa2/2017-02-11-00-31-57.world`
 7. On a *fourth* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
 8. `cd ~/catkin_ws/src` and run `rviz`
 9. Open your web browser to `localhost:8080/vnc.html` and click connect.

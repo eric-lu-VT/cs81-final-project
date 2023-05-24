@@ -45,9 +45,9 @@ OCCUPANCY_GRID_MAX_PROBABILITY = 100
 # Min probability in occupancy grid (by ros specs.) Representing free space
 OCCUPANCY_GRID_MIN_PROBABILITY = 0
 OCCUPANCY_GRID_UNKNOWN = -1  # Representing unseen cell in occupancy grid
-RESOLUTION = 1  # m/cell
-WIDTH = 100  # m
-HEIGHT = 100  # m
+RESOLUTION = 0.1  # m/cell
+WIDTH = 500  # m
+HEIGHT = 500  # m
 
 
 """A class representing the occupancy grid map. Taken from my PA3 Code, and
@@ -117,6 +117,7 @@ class Grid:
     list of frontier points
   """
   def getWavefrontPoints(self, x_start, y_start):
+    print('Starting wavefront...')
     queue_map = [(x_start, y_start)]
     map_open_list = {} # list of points enqueued by outer BFS
     map_open_list[(x_start, y_start)] = (x_start, y_start)
@@ -127,7 +128,7 @@ class Grid:
     contiguous_frontiers = [] # final result to return
 
     while len(queue_map) > 0: # while queue_m is not empty
-      r, c = queue_map.pop(0) # p ← DEQUEUE ( queuem )
+      r, c = queue_map.pop(0) # p gets DEQUEUE ( queuem )
       if (r, c) in map_close_list: # if p is marked as "Map -Close - List ":
         continue
             
@@ -142,8 +143,7 @@ class Grid:
         frontier_open_list[(r, c)] = (r, c) # mark p as " Frontier -Open - List "
 
         while len(queue_frontier) > 0:
-          print('here3', len(queue_frontier)) # temp
-          u, v = queue_frontier.pop(0) # q ← DEQUEUE ( queuef )
+          u, v = queue_frontier.pop(0) # q gets DEQUEUE ( queuef )
           if (u, v) in map_close_list or (u, v) in frontier_close_list: # if q is marked as {"Map -Close - List "," Frontier -Close - List "}:
             continue
                     
@@ -153,9 +153,8 @@ class Grid:
               isSecondFrontierPoint = True
               break
           if isSecondFrontierPoint: # if q is a frontier point :
-            print('here4')
             new_frontier.append((u, v))
-            for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all w ∈ neighbors (q):
+            for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all w in neighbors (q):
               w_pt = (u + dx, v + dy) 
               if not w_pt in frontier_open_list and not w_pt in frontier_close_list and not w_pt in map_close_list:
                 queue_frontier.append(w_pt)
@@ -166,7 +165,7 @@ class Grid:
         for pt in new_frontier:
           map_close_list[pt] = pt
             
-      for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all v ∈ neighbors (p):
+      for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all v in neighbors (p):
         if not (r + dx, c + dy) in map_open_list and not (r + dx, c + dy) in map_close_list: # if v not marked as {"Map -Open - List ","Map -Close - List "}
           for (dx1, dy1) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # and v has at least one "Map -Open - Space " neighbor :
             if self.cellAt(r + dx + dx1, c + dx + dy1) == 0:
@@ -176,6 +175,7 @@ class Grid:
 
       map_close_list[(r, c)] = (r, c) # mark p as "Map -Close - List"
         
+    print('Ending wavefront...')
     return contiguous_frontiers
 
 class RobotDog():
@@ -440,7 +440,8 @@ class RobotDog():
         bot_x_grid = numpy.ceil(bot_pt_grid.item(0, 0)).astype(int)
         bot_y_grid = numpy.ceil(bot_pt_grid.item(0, 1)).astype(int)
 
-        print(self.map.getWavefrontPoints(bot_x_grid, bot_y_grid)) # Temp
+        res = self.map.getWavefrontPoints(bot_x_grid, bot_y_grid)
+        print(len(res))
 
     """
     Class main function
