@@ -1,14 +1,13 @@
 #!/usr/bin/env python
-# type: ignore (ignore missing imports for rospy, tf, etc.)
 # The line above is important so that this file is interpreted with Python when running it.
+# type: ignore (ignore missing imports for rospy, tf, etc.)
 
 # Authors: Eric Lu, Jordan Kirkbride, Julian Wu, Wendell Wu
 # Based off of starter code provided to class by Prof. Quattrini Li
-# Date: 6/3/23
+# Date: 2023-06-03
 
 # Import of python modules.
 import math  # use of pi.
-import random  # use of random
 import numpy
 import sys
 
@@ -49,20 +48,28 @@ RESOLUTION = 0.1  # m/cell
 WIDTH = 500  # m
 HEIGHT = 500  # m
 
+# Field of view in radians that is checked in front of the robot
+MIN_SCAN_ANGLE_RAD = -45.0 / 180 * math.pi; # must be experimentally determined
+MAX_SCAN_ANGLE_RAD = +45.0 / 180 * math.pi; # check camera fov
 
 """A class representing the occupancy grid map. Taken from my PA3 Code, and
 added more functionality to enable publishing/manipulation."""
-
-
 class Grid:
   def __init__(self, width, height, resolution, origin):
     """Initialize an empty map grid with everything
-    marked as -1 (unknown) message."""
+    marked as -1 (unknown) message.
+    
+    Args:
+      width: width of the map in meters
+      height: height of the map in meters
+      resolution: resolution of the map in meters/cell
+      origin: origin of the grid in map, a pose object
+    """
     # turn the grid's occupancy data into a numpy array of the correct
     # dimensions
-    self.grid = numpy.full((height, width), -1)
-    self.width = width  # width of the map in cells
-    self.height = height  # height of the map in cells
+    self.width = width/resolution  # width of the map in cells
+    self.height = height/resolution  # height of the map in cells
+    self.grid = numpy.full((self.height, self.width), -1)
     self.resolution = resolution  # resolution of the map in meters/cell
     self.origin = origin  # origin of the grid in map, a pose object
     self.wallsExpanded = False  # turns true after calling expandWalls()
@@ -102,7 +109,8 @@ class Grid:
   def getGridCoordinates(self, x, y):
     """Converts from continuous world coordinates to grid coordinates."""
     # first offset by the origin of the grid, then divide by resolution
-    return (int((x - self.origin.position.x) / self.resolution), int((y - self.origin.position.y) / self.resolution))
+    return (int((x - self.origin.position.x) / self.resolution),
+            int((y - self.origin.position.y) / self.resolution))
 
   def isPointInGrid(self, x, y):
     return (0 <= y < len(self.grid) and 0 <= x < len(self.grid[0]))
@@ -180,14 +188,20 @@ class Grid:
 
 class RobotDog():
     def __init__(self, mode, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY):
-        """Constructor."""
+        """
+        Constructor.
+        
+        Args:
+            mode (str): Mode of operation. Can be either 1 or 2.
+            linear_velocity (float): Linear velocity of the robot.
+            angular_velocity (float): Angular velocity of the robot.
+        """
 
         self.selected_mode = mode
 
         # Setting up publishers/subscribers.
         # Setting up the publisher to send velocity commands.
         self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
-
         # Setting up odom subscriber
         self._odom_sub = rospy.Subscriber(ODOM_TOPIC, Odometry, self._odom_callback)
         # Setting up laser subscriber
@@ -212,9 +226,10 @@ class RobotDog():
 
         # The variable containing the map
         origin_pose = Pose()
-        origin_pose.position.x = -10  # - (WIDTH * RESOLUTION) / 2
-        origin_pose.position.y = -10  # - (HEIGHT * RESOLUTION) / 2
-        self.map = Grid(WIDTH, HEIGHT, RESOLUTION, origin_pose)
+        origin_pose.position.x = - (GRID_WIDTH_M * RESOLUTION) / 2
+        origin_pose.position.y = - (GRID_HEIGHT_M * RESOLUTION) / 2
+        origin_pose.position.z = 0
+        self.map = Grid(GRID_WIDTH_M, GRID_HEIGHT_M, RESOLUTION, origin_pose)
 
         # State stuff
         self.is_rotating = False
@@ -323,8 +338,8 @@ class RobotDog():
             mow = self.map.origin.orientation.w
             (map_roll, map_pitch, map_yaw) = tf.transformations.euler_from_quaternion([mox, moy, moz, mow])
             grid_T_odom = numpy.matrix([
-                [math.cos(map_yaw), -math.sin(map_yaw), 0, WIDTH / 2],  # Make it so that OccupancyGrid
-                [math.sin(map_yaw), math.cos(map_yaw), 0, HEIGHT / 2],  # is not just first quadrant
+                [math.cos(map_yaw), -math.sin(map_yaw), 0, GRID_WIDTH_M / 2],  # Make it so that OccupancyGrid
+                [math.sin(map_yaw), math.cos(map_yaw), 0, GRID_HEIGHT_M / 2],  # is not just first quadrant
                 [0, 0, 1, self.map.origin.position.z],
                 [0, 0, 0, 1]
             ])
@@ -430,8 +445,8 @@ class RobotDog():
         mow = self.map.origin.orientation.w
         (map_roll, map_pitch, map_yaw) = tf.transformations.euler_from_quaternion([mox, moy, moz, mow])
         grid_T_odom = numpy.matrix([
-          [math.cos(map_yaw), -math.sin(map_yaw), 0, WIDTH / 2],  # Make it so that OccupancyGrid
-          [math.sin(map_yaw), math.cos(map_yaw), 0, HEIGHT / 2],  # is not just first quadrant
+          [math.cos(map_yaw), -math.sin(map_yaw), 0, GRID_WIDTH_M / 2],  # Make it so that OccupancyGrid
+          [math.sin(map_yaw), math.cos(map_yaw), 0, GRID_HEIGHT_M / 2],  # is not just first quadrant
           [0, 0, 1, self.map.origin.position.z],
           [0, 0, 0, 1]
         ])
@@ -488,7 +503,7 @@ def main():
     sys.exit(1)
 
   # Initialization of the class for the random walk.
-  robot_dog = RobotDog(mode)
+  robot_dog = RobotDog(mode, LINEAR_VELOCITY, ANGULAR_VELOCITY)
 
   # If interrupted, send a stop command before interrupting.
   rospy.on_shutdown(robot_dog.stop)
