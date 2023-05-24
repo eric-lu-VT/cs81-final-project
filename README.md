@@ -1,6 +1,6 @@
 # README.md - CS81 Final Project
 
-This programming assignment
+This CS81 Final Project
 
 Authors: Eric Lu, Jordan Kirkbride, Julian Wu, Wendell Wu
 
@@ -31,6 +31,7 @@ To run the program locally on the PC:
 4. Run `roscore` to start the VNC viewer
 5. On a *third* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
 6. `cd ~/catkin_ws/src` and run `rosrun stage_ros stageros /opt/ros/melodic/share/nav2d_tutorials/world/tutorial.world`
+   - Or `rosrun stage_ros stageros ~/catkin_ws/pa1/PA1.world`
 7. On a *fourth* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
 8. `cd ~/catkin_ws/src` and run `rviz`
 9. Open your web browser to `localhost:8080/vnc.html` and click connect.
@@ -38,8 +39,8 @@ To run the program locally on the PC:
 11. In the sidebar, click add > by topic > /map > set topic to `/map` 
 12. On a *fifth* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
 13. `cd ~/catkin_ws/src` and choose one of the following:
-    - To run pre-determined motion (mostly for simulation): `rosrun cs81_final_project robot_dog.py 1`
-    - To let all motion be determined from the command line: `rosrun cs81_final_project  robot_dog.py 2`
+    - To run pre-determined motion (mostly for simulation): `rosrun cs77-final-project robot_dog.py 1`
+    - To let all motion be determined from the command line: `rosrun cs81-final-project robot_dog.py 2`
 14. The robot should now be moving in the VNC viewer on the browser, and there should also be a OccupancyGrid mapping in the rviz.
     - To see the OccupancyGrid mapping, you may need to zoom out focal point (on the right sidebar in rviz)
 
@@ -71,8 +72,8 @@ To run the program on the robot:
 5. Open *second* tmux terminal with `tmux`
 6. `cd ~/catkin_ws/src/cs81-final-project/src/`
 7. Start running the robot:
-    - To run pre-determined motion (mostly for simulation): `rosrun cs81_final_project robot_dog.py 1`
-    - To let all motion be determined from the command line: `rosrun cs81_final_project  robot_dog.py 2`
+    - To run pre-determined motion (mostly for simulation): `rosrun cs81-final-project robot_dog.py 1`
+    - To let all motion be determined from the command line: `rosrun cs81-final-project  robot_dog.py 2`
 
 Note that to open teleoperation, run `rosrun turtlebot3_teleop turtlebot3_teleop_key` from a new terminal connected to `ssh dartmouth@192.168.111.11`
 
