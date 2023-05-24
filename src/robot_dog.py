@@ -67,9 +67,9 @@ class Grid:
     """
     # turn the grid's occupancy data into a numpy array of the correct
     # dimensions
-    self.grid = numpy.full((height, width), -1)
     self.width = width/resolution  # width of the map in cells
     self.height = height/resolution  # height of the map in cells
+    self.grid = numpy.full((self.height, self.width), -1)
     self.resolution = resolution  # resolution of the map in meters/cell
     self.origin = origin  # origin of the grid in map, a pose object
     self.wallsExpanded = False  # turns true after calling expandWalls()
