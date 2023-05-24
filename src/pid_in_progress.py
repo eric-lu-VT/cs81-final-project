@@ -50,12 +50,15 @@ class FollowWall():
         self.current_distance_error = 1000
         self.prev_distance_error = 0
 
+        self.x_error = 0
+        self.y_error = 0
         self.ball_x = 9
         self.ball_y = 9
         self.reached_ball = False
         self.threshold_distance = .2
         self.prev_angle_difference = 0
         self.ball_offset = .5
+        self.distance_to_goal = 1000
 
 
     def move(self, linear_vel, angular_vel):
@@ -74,31 +77,34 @@ class FollowWall():
 
     def _laser_callback(self, msg):
         """Processing of laser message."""
+        self.pd_controller()
 
+    def pd_controller(self):
+        
         # Travel to the ball if not already there
         if not self.reached_ball:
             print("BALL TOO FAR")
-            x_error = self.ball_x - (self.odometry_x + self.ball_offset)
-            y_error = self.ball_y - (self.odometry_y + self.ball_offset)
-            print("x_error:", x_error)
-            print("y_error:", y_error)
+            self.x_error = self.ball_x - (self.odometry_x + self.ball_offset)
+            self.y_error = self.ball_y - (self.odometry_y + self.ball_offset)
+            print("x_error:", self.x_error)
+            print("y_error:", self.y_error)
 
-            distance_to_goal = math.sqrt(x_error**2 + y_error**2)
+            self.distance_to_goal = math.sqrt(self.x_error**2 + self.y_error**2)
             
-            if distance_to_goal < self.threshold_distance: # we have arrived at the ball
+            if self.distance_to_goal < self.threshold_distance: # we have arrived at the ball
                 self.reached_ball = True
                 #self.goal_position = (self.odometry_x + self.goal_offset, self.odometry_y)  # Set the goal position in front of the robot
-                self.move(self.linear_velocity)
-                
+                self.stop()                
             else:
-                self.pd_controller(x_error, y_error, self.linear_velocity)
+                self.pd_helper(self.x_error, self.y_error)
         else:
             print("BALL REACHED")
             self.move(self.linear_velocity, 0) # Ball is in the correct position, move forward
-            if distance_to_goal > self.threshold_distance:
+            if self.distance_to_goal > self.threshold_distance:
                 self.reached_ball = False
 
-    def pd_controller(self, x_error, y_error, linear_velocity):
+    
+    def pd_helper(self, x_error, y_error):
         # Calculate angle to the goal position
         target_angle = math.atan2(y_error, x_error)
 
@@ -119,8 +125,8 @@ class FollowWall():
         self.prev_angle_difference = angle_difference
 
         # Move the robot forward with the given linear velocity and calculated angular velocity
-        self.move(linear_velocity, w)
-    
+        self.move(self.linear_velocity, w)
+
     def odom_callback(self, msg):
         # Get x, y from odom and calculate theta
         self.odometry_x = msg.pose.pose.position.x
