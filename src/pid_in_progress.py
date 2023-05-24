@@ -55,6 +55,7 @@ class FollowWall():
         self.reached_ball = False
         self.threshold_distance = .2
         self.prev_angle_difference = 0
+        self.ball_offset = .5
 
 
     def move(self, linear_vel, angular_vel):
@@ -76,8 +77,9 @@ class FollowWall():
 
         # Travel to the ball if not already there
         if not self.reached_ball:
-            x_error = self.ball_x - self.odometry_x
-            y_error = self.ball_y - self.odometry_y
+            print("BALL TOO FAR")
+            x_error = self.ball_x - (self.odometry_x + self.ball_offset)
+            y_error = self.ball_y - (self.odometry_y + self.ball_offset)
             print("x_error:", x_error)
             print("y_error:", y_error)
 
@@ -86,24 +88,15 @@ class FollowWall():
             if distance_to_goal < self.threshold_distance: # we have arrived at the ball
                 self.reached_ball = True
                 #self.goal_position = (self.odometry_x + self.goal_offset, self.odometry_y)  # Set the goal position in front of the robot
-                self.stop()
-                print("BALL REACHED")
+                self.move(self.linear_velocity)
+                
             else:
                 self.pd_controller(x_error, y_error, self.linear_velocity)
         else:
-            x_error = 0 - self.odometry_x
-            y_error = 0 - self.odometry_y
-            print("x_error:", x_error)
-            print("y_error:", y_error)
-
-            distance_to_goal = math.sqrt(x_error**2 + y_error**2)
-            
-            if distance_to_goal < self.threshold_distance: # we have arrived at the ball
-                self.reached_ball = True
-                #self.goal_position = (self.odometry_x + self.goal_offset, self.odometry_y)  # Set the goal position in front of the robot
-                self.stop()
-            else:
-                self.pd_controller(x_error, y_error, self.linear_velocity)
+            print("BALL REACHED")
+            self.move(self.linear_velocity, 0) # Ball is in the correct position, move forward
+            if distance_to_goal > self.threshold_distance:
+                self.reached_ball = False
 
     def pd_controller(self, x_error, y_error, linear_velocity):
         # Calculate angle to the goal position
