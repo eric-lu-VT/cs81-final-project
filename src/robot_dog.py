@@ -126,10 +126,9 @@ class Grid:
         
     contiguous_frontiers = [] # final result to return
 
-    while len(queue_map) > 0:
-      r, c = queue_map.pop(0)
-      print('here1', r, c)
-      if (r, c) in map_close_list:
+    while len(queue_map) > 0: # while queue_m is not empty
+      r, c = queue_map.pop(0) # p ← DEQUEUE ( queuem )
+      if (r, c) in map_close_list: # if p is marked as "Map -Close - List ":
         continue
             
       isFrontierPoint = False
@@ -137,15 +136,15 @@ class Grid:
         if self.isPointInGrid(r + dx, c + dy) and self.cellAt(r + dx, c + dy) == -1:
           isFrontierPoint = True
           break
-      if isFrontierPoint:
+      if isFrontierPoint: # if p is a frontier point
         queue_frontier = [(r, c)]
         new_frontier = []
-        frontier_open_list[(r, c)] = (r, c)
+        frontier_open_list[(r, c)] = (r, c) # mark p as " Frontier -Open - List "
 
         while len(queue_frontier) > 0:
-          print('here3', len(queue_frontier))
-          u, v = queue_frontier.pop(0)
-          if (u, v) in map_close_list or (u, v) in frontier_close_list:
+          print('here3', len(queue_frontier)) # temp
+          u, v = queue_frontier.pop(0) # q ← DEQUEUE ( queuef )
+          if (u, v) in map_close_list or (u, v) in frontier_close_list: # if q is marked as {"Map -Close - List "," Frontier -Close - List "}:
             continue
                     
           isSecondFrontierPoint = False 
@@ -153,29 +152,29 @@ class Grid:
             if self.isPointInGrid(u + dx, v + dy) and self.cellAt(u + dx, v + dy) == -1:
               isSecondFrontierPoint = True
               break
-          if isSecondFrontierPoint:
+          if isSecondFrontierPoint: # if q is a frontier point :
             print('here4')
             new_frontier.append((u, v))
-            for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)):
+            for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all w ∈ neighbors (q):
               w_pt = (u + dx, v + dy) 
               if not w_pt in frontier_open_list and not w_pt in frontier_close_list and not w_pt in map_close_list:
                 queue_frontier.append(w_pt)
-                frontier_open_list[w_pt] = w_pt
-            frontier_close_list[(u, v)] = (u, v)
+                frontier_open_list[w_pt] = w_pt # mark w as " Frontier -Open - List "
+          frontier_close_list[(u, v)] = (u, v)
                 
-          contiguous_frontiers.append(new_frontier)
-          for pt in new_frontier:
-            map_close_list[pt] = pt
+        contiguous_frontiers.append(new_frontier)
+        for pt in new_frontier:
+          map_close_list[pt] = pt
             
-      for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)):
-        if not (r + dx, c + dy) in map_open_list and not (r + dx, c + dy) in map_close_list:
-          for (dx1, dy1) in ((1, 0), (0, 1), (-1, 0), (0, -1)):
+      for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all v ∈ neighbors (p):
+        if not (r + dx, c + dy) in map_open_list and not (r + dx, c + dy) in map_close_list: # if v not marked as {"Map -Open - List ","Map -Close - List "}
+          for (dx1, dy1) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # and v has at least one "Map -Open - Space " neighbor :
             if self.cellAt(r + dx + dx1, c + dx + dy1) == 0:
               queue_map.append((r + dx, c + dy))
-              map_open_list[(r + dx, c + dy)] = (r + dx, c + dy)
+              map_open_list[(r + dx, c + dy)] = (r + dx, c + dy) # mark v as "Map -Open - List "
               break
 
-      map_close_list[(r, c)] = (r, c)
+      map_close_list[(r, c)] = (r, c) # mark p as "Map -Close - List"
         
     return contiguous_frontiers
 
