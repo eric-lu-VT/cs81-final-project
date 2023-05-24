@@ -1,14 +1,13 @@
 #!/usr/bin/env python
-# type: ignore (ignore missing imports for rospy, tf, etc.)
 # The line above is important so that this file is interpreted with Python when running it.
+# type: ignore (ignore missing imports for rospy, tf, etc.)
 
 # Authors: Eric Lu, Jordan Kirkbride, Julian Wu, Wendell Wu
 # Based off of starter code provided to class by Prof. Quattrini Li
-# Date: 6/3/23
+# Date: 2023-06-03
 
 # Import of python modules.
 import math  # use of pi.
-import random  # use of random
 import numpy
 import sys
 
@@ -46,23 +45,31 @@ OCCUPANCY_GRID_MAX_PROBABILITY = 100
 OCCUPANCY_GRID_MIN_PROBABILITY = 0
 OCCUPANCY_GRID_UNKNOWN = -1  # Representing unseen cell in occupancy grid
 RESOLUTION = 1  # m/cell
-WIDTH = 100  # m
-HEIGHT = 100  # m
+GRID_WIDTH_M = 100  # m
+GRID_HEIGHT_M = 100  # m
 
+# Field of view in radians that is checked in front of the robot
+MIN_SCAN_ANGLE_RAD = -45.0 / 180 * math.pi; # must be experimentally determined
+MAX_SCAN_ANGLE_RAD = +45.0 / 180 * math.pi; # check camera fov
 
 """A class representing the occupancy grid map. Taken from my PA3 Code, and
 added more functionality to enable publishing/manipulation."""
-
-
 class Grid:
   def __init__(self, width, height, resolution, origin):
     """Initialize an empty map grid with everything
-    marked as -1 (unknown) message."""
+    marked as -1 (unknown) message.
+    
+    Args:
+      width: width of the map in meters
+      height: height of the map in meters
+      resolution: resolution of the map in meters/cell
+      origin: origin of the grid in map, a pose object
+    """
     # turn the grid's occupancy data into a numpy array of the correct
     # dimensions
     self.grid = numpy.full((height, width), -1)
-    self.width = width  # width of the map in cells
-    self.height = height  # height of the map in cells
+    self.width = width/resolution  # width of the map in cells
+    self.height = height/resolution  # height of the map in cells
     self.resolution = resolution  # resolution of the map in meters/cell
     self.origin = origin  # origin of the grid in map, a pose object
     self.wallsExpanded = False  # turns true after calling expandWalls()
@@ -102,7 +109,8 @@ class Grid:
   def getGridCoordinates(self, x, y):
     """Converts from continuous world coordinates to grid coordinates."""
     # first offset by the origin of the grid, then divide by resolution
-    return (int((x - self.origin.position.x) / self.resolution), int((y - self.origin.position.y) / self.resolution))
+    return (int((x - self.origin.position.x) / self.resolution),
+            int((y - self.origin.position.y) / self.resolution))
 
   def isPointInGrid(self, x, y):
     return (0 <= y < len(self.grid) and 0 <= x < len(self.grid[0]))
@@ -127,7 +135,7 @@ class Grid:
     contiguous_frontiers = [] # final result to return
 
     while len(queue_map) > 0: # while queue_m is not empty
-      r, c = queue_map.pop(0) # p ← DEQUEUE ( queuem )
+      r, c = queue_map.pop(0) # p gets DEQUEUE ( queuem )
       if (r, c) in map_close_list: # if p is marked as "Map -Close - List ":
         continue
             
@@ -143,7 +151,7 @@ class Grid:
 
         while len(queue_frontier) > 0:
           print('here3', len(queue_frontier)) # temp
-          u, v = queue_frontier.pop(0) # q ← DEQUEUE ( queuef )
+          u, v = queue_frontier.pop(0) # q gets DEQUEUE ( queuef )
           if (u, v) in map_close_list or (u, v) in frontier_close_list: # if q is marked as {"Map -Close - List "," Frontier -Close - List "}:
             continue
                     
@@ -155,7 +163,7 @@ class Grid:
           if isSecondFrontierPoint: # if q is a frontier point :
             print('here4')
             new_frontier.append((u, v))
-            for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all w ∈ neighbors (q):
+            for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all w in neighbors (q):
               w_pt = (u + dx, v + dy) 
               if not w_pt in frontier_open_list and not w_pt in frontier_close_list and not w_pt in map_close_list:
                 queue_frontier.append(w_pt)
@@ -166,7 +174,7 @@ class Grid:
         for pt in new_frontier:
           map_close_list[pt] = pt
             
-      for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all v ∈ neighbors (p):
+      for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all v in neighbors (p):
         if not (r + dx, c + dy) in map_open_list and not (r + dx, c + dy) in map_close_list: # if v not marked as {"Map -Open - List ","Map -Close - List "}
           for (dx1, dy1) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # and v has at least one "Map -Open - Space " neighbor :
             if self.cellAt(r + dx + dx1, c + dx + dy1) == 0:
@@ -180,14 +188,20 @@ class Grid:
 
 class RobotDog():
     def __init__(self, mode, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY):
-        """Constructor."""
+        """
+        Constructor.
+        
+        Args:
+            mode (str): Mode of operation. Can be either 1 or 2.
+            linear_velocity (float): Linear velocity of the robot.
+            angular_velocity (float): Angular velocity of the robot.
+        """
 
         self.selected_mode = mode
 
         # Setting up publishers/subscribers.
         # Setting up the publisher to send velocity commands.
         self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
-
         # Setting up odom subscriber
         self._odom_sub = rospy.Subscriber(ODOM_TOPIC, Odometry, self._odom_callback)
         # Setting up laser subscriber
@@ -212,9 +226,10 @@ class RobotDog():
 
         # The variable containing the map
         origin_pose = Pose()
-        origin_pose.position.x = -10  # - (WIDTH * RESOLUTION) / 2
-        origin_pose.position.y = -10  # - (HEIGHT * RESOLUTION) / 2
-        self.map = Grid(WIDTH, HEIGHT, RESOLUTION, origin_pose)
+        origin_pose.position.x = - (GRID_WIDTH_M * RESOLUTION) / 2
+        origin_pose.position.y = - (GRID_HEIGHT_M * RESOLUTION) / 2
+        origin_pose.position.z = 0
+        self.map = Grid(GRID_WIDTH_M, GRID_HEIGHT_M, RESOLUTION, origin_pose)
 
         # State stuff
         self.is_rotating = False
@@ -323,8 +338,8 @@ class RobotDog():
             mow = self.map.origin.orientation.w
             (map_roll, map_pitch, map_yaw) = tf.transformations.euler_from_quaternion([mox, moy, moz, mow])
             grid_T_odom = numpy.matrix([
-                [math.cos(map_yaw), -math.sin(map_yaw), 0, WIDTH / 2],  # Make it so that OccupancyGrid
-                [math.sin(map_yaw), math.cos(map_yaw), 0, HEIGHT / 2],  # is not just first quadrant
+                [math.cos(map_yaw), -math.sin(map_yaw), 0, GRID_WIDTH_M / 2],  # Make it so that OccupancyGrid
+                [math.sin(map_yaw), math.cos(map_yaw), 0, GRID_HEIGHT_M / 2],  # is not just first quadrant
                 [0, 0, 1, self.map.origin.position.z],
                 [0, 0, 0, 1]
             ])
@@ -430,8 +445,8 @@ class RobotDog():
         mow = self.map.origin.orientation.w
         (map_roll, map_pitch, map_yaw) = tf.transformations.euler_from_quaternion([mox, moy, moz, mow])
         grid_T_odom = numpy.matrix([
-          [math.cos(map_yaw), -math.sin(map_yaw), 0, WIDTH / 2],  # Make it so that OccupancyGrid
-          [math.sin(map_yaw), math.cos(map_yaw), 0, HEIGHT / 2],  # is not just first quadrant
+          [math.cos(map_yaw), -math.sin(map_yaw), 0, GRID_WIDTH_M / 2],  # Make it so that OccupancyGrid
+          [math.sin(map_yaw), math.cos(map_yaw), 0, GRID_HEIGHT_M / 2],  # is not just first quadrant
           [0, 0, 1, self.map.origin.position.z],
           [0, 0, 0, 1]
         ])
@@ -487,7 +502,7 @@ def main():
     sys.exit(1)
 
   # Initialization of the class for the random walk.
-  robot_dog = RobotDog(mode)
+  robot_dog = RobotDog(mode, LINEAR_VELOCITY, ANGULAR_VELOCITY)
 
   # If interrupted, send a stop command before interrupting.
   rospy.on_shutdown(robot_dog.stop)
