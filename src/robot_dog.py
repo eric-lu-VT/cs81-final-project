@@ -53,6 +53,8 @@ ANGULAR_VELOCITY = math.pi/4 # rad/s
 # Maximum Range Allowed as Valid Measurement from Laser, Tunable
 MAX_LASER_RANGE = 9.5 # meters for simulation
 
+ROBOT_SIZE = 0.2 # roughly .2m for turtlebot (defined from tutorial.inc)
+
 # Grid Definitions
 # Grid parameters
 # Max probability in occupancy grid (by ros specs.) Representing a wall/obstacle
@@ -63,6 +65,10 @@ OCCUPANCY_GRID_UNKNOWN = -1  # Representing unseen cell in occupancy grid
 GRID_WIDTH_M = 150.0 # width of the grid in meters
 GRID_HEIGHT_M = 150.0 # height of the grid in meters
 GRID_RESOLUTION = 0.05 # resolution of the grid in meters/cell
+
+# states
+STATE_IDLE = 0
+STATE_MOVING = 1
 
 class Grid:
 	"""
@@ -80,6 +86,8 @@ class Grid:
 		self.expandedGrid = np.full((self.height, self.width), -1) # keep second copy just for expanded grid
 		self.resolution = resolution # resolution of the map in meters/cell
 		self.originPose = origin # origin of the grid in map, a pose object
+
+		self.target = (0, 0)
 	
 	def getOccupancyGridMsg(self):
 		"""Return the occupancy grid as a ROS OccupancyGrid message."""
@@ -164,6 +172,15 @@ class Grid:
 								expandedGrid[new_r, new_c] = OCCUPANCY_GRID_OCCUPIED
 		self.expandedGrid = expandedGrid
 	
+	def getNextTarget(self):
+		"""
+		Find the next target point to go to in the grid.
+		"""
+		# for our real implementation, find the nearest unexplored cell
+		# for now, just return the center of the grid
+		self.target = (self.target[0] - 1, self.target[1] + 1)
+		return self.target
+
 	def getWavefrontPoints(self, x_start, y_start):
 		"""
 		Search for frontiers
@@ -275,7 +292,10 @@ class RobotDog:
 		self.trans = None # most recent translation from odom to base_link
 		self.rot = None # most recent rotation from odom to base_link
 
+		self.targetNode = (0, 0)
 		self.poseArray = None # array of poses for the robot to follow
+
+		self.state = STATE_IDLE # current state of the robot
 
 	def _laser_callback(self, msg):
 		"""
@@ -604,6 +624,13 @@ class RobotDog:
 				# publish it
 				msg = self.occGrid.getOccupancyGridMsg()
 				self.occGridPub.publish(msg)
+			
+			
+			self.planPath(self.occGrid.getNextTarget())
+			print("Path planned.")
+			self.followPath()
+			print("goal reached")
+
 			rate.sleep()
 
 	def wavefront(self):
@@ -654,6 +681,6 @@ if __name__ == "__main__":
 	rospy.on_shutdown(dog.stop)
 
 	try:
-		dog.main()
+		dog.spin()
 	except rospy.ROSInterruptException:
 		rospy.logerr("ROS Node Interrupted")
