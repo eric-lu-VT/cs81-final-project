@@ -38,6 +38,7 @@ class Camera():
         self.rate = rospy.Rate(FREQUENCY)
         self.bridge = CvBridge()
 
+    # Inspired from: https://www.youtube.com/watch?v=-YCcQZmKJtY&ab_channel=D%C3%A1vidDud%C3%A1s
     def _camera_callback(self, camera_data):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(camera_data, desired_encoding="bgr8")
