@@ -634,31 +634,15 @@ class RobotDog:
 
 			rate.sleep()
 
-	def wavefront(self):
-		mox = self.occGrid.originPose.orientation.x
-		moy = self.occGrid.originPose.orientation.y
-		moz = self.occGrid.originPose.orientation.z
-		mow = self.occGrid.originPose.orientation.w
-		(map_roll, map_pitch, map_yaw) = tf.transformations.euler_from_quaternion([mox, moy, moz, mow])
-		grid_T_odom = np.matrix([
-			[math.cos(map_yaw), -math.sin(map_yaw), 0, GRID_WIDTH_M / 2],  # Make it so that OccupancyGrid
-			[math.sin(map_yaw), math.cos(map_yaw), 0, GRID_HEIGHT_M / 2],  # is not just first quadrant
-			[0, 0, 1, self.occGrid.originPose.position.z],
-			[0, 0, 0, 1]
-		])
-			
+	def getFrontiers(self):
 		t = tf.transformations.translation_matrix(self.trans)
 		R = tf.transformations.quaternion_matrix(self.rot)
 		o_T_b = t.dot(R) # base to odom transformation matrix, used to convert
 		(robotX, robotY) = [int(o_T_b[0,3]), int(o_T_b[1,3])]
-		print('Current value of occupancy grid at current robot pos: ', self.occGrid.cellAt(robotX, robotY))
+		print('Current value of (robotX, robotY): ', self.occGrid.cellAt(robotX, robotY))
 
-		bot_pt_grid = grid_T_odom.dot(np.transpose([robotX, robotY, 0, self.occGrid.resolution])) * (1 / self.occGrid.resolution)
-		bot_x_grid = np.ceil(bot_pt_grid.item(0, 0)).astype(int)
-		bot_y_grid = np.ceil(bot_pt_grid.item(0, 1)).astype(int)
-
-		res = self.occGrid.getWavefrontPoints(bot_x_grid, bot_y_grid)
-		print(len(res))
+		res = self.occGrid.getWavefrontPoints(robotX, robotY)
+		print('Number of frontiers: ', len(res))
 	
 	def main(self):
 		"""
@@ -670,7 +654,7 @@ class RobotDog:
 		msg = self.occGrid.getOccupancyGridMsg()
 		self.occGridPub.publish(msg)
 		
-		self.wavefront()
+		self.getFrontiers()
 		self.stop()
 
 if __name__ == "__main__":
@@ -683,6 +667,7 @@ if __name__ == "__main__":
 	rospy.on_shutdown(dog.stop)
 
 	try:
-		dog.spin()
+		# dog.spin()
+ 		dog.main()
 	except rospy.ROSInterruptException:
 		rospy.logerr("ROS Node Interrupted")
