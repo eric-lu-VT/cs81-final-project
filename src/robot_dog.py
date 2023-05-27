@@ -107,6 +107,8 @@ class Grid:
 
 	def cellAt(self, x, y):
 		"""Returns the value of the cell at the given coordinates."""
+		if not self.isPointInGrid(x, y): # out of grid boundaries
+			return OCCUPANCY_GRID_OCCUPIED
 		# assume row-major order
 		return self.grid[y, x]
 	
@@ -176,7 +178,6 @@ class Grid:
 		Returns:
 			list of frontier points
 		"""
-		print('Starting wavefront...')
 		queue_map = [(x_start, y_start)]
 		map_open_list = {} # list of points enqueued by outer BFS
 		map_open_list[(x_start, y_start)] = (x_start, y_start)
@@ -186,61 +187,61 @@ class Grid:
 		contiguous_frontiers = [] # final result to return
 
 		while len(queue_map) > 0: # while queue_m is not empty
-			print('queue_map: ', len(queue_map))
 			p = queue_map.pop(0) # p gets DEQUEUE ( queuem )
+			#print('p: ', p, self.cellAt(p[0], p[1]))
 			if p in map_close_list: # if p is marked as "Map -Close - List ":
 				continue
-				
+					
 			isFrontierPoint = False
 			for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)):
-				if self.isPointInGrid(p[0] + dx, p[1] + dy) and self.cellAt(p[0] + dx, p[1] + dy) == OCCUPANCY_GRID_FREE_SPACE and self.cellAt(p[0], p[1]) == OCCUPANCY_GRID_UNKNOWN:
+				if self.cellAt(p[0], p[1]) == OCCUPANCY_GRID_UNKNOWN and self.cellAt(p[0] + dx, p[1] + dy) == OCCUPANCY_GRID_FREE_SPACE:
 					isFrontierPoint = True
 					break
 			if isFrontierPoint: # if p is a frontier point
 				queue_frontier = [p]
 				new_frontier = []
 				frontier_open_list[p] = p # mark p as " Frontier -Open - List "
-				print('here1')
 
 				while len(queue_frontier) > 0: # while queue_f is not empty:
-					print('queue_frontier: ', len(queue_frontier))
 					q = queue_frontier.pop(0) # q gets DEQUEUE ( queue_f )
+					# print('q: ', q, self.cellAt(q[0], q[1]))
 					if q in map_close_list or q in frontier_close_list: # if q is marked as {"Map -Close - List "," Frontier -Close - List "}:
 						continue
 					isSecondFrontierPoint = False 
 					for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)):
-						if self.isPointInGrid(q[0] + dx, q[1] + dy) and self.cellAt(q[0], q[1]) == OCCUPANCY_GRID_UNKNOWN and self.cellAt(q[0] + dx, q[1] + dy) == OCCUPANCY_GRID_FREE_SPACE:
+						if self.cellAt(q[0], q[1]) == OCCUPANCY_GRID_UNKNOWN and self.cellAt(q[0] + dx, q[1] + dy) == OCCUPANCY_GRID_FREE_SPACE:
 							isSecondFrontierPoint = True
 							break
 					if isSecondFrontierPoint: # if q is a frontier point :
-						new_frontier.append((u, v))
+						new_frontier.append(q) # NewFrontier <-- q
 						for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all w in neighbors (q):
-							w_pt = (u + dx, v + dy) 
+							w_pt = (q[0] + dx, q[1] + dy) 
 							if not w_pt in frontier_open_list and not w_pt in frontier_close_list and not w_pt in map_close_list:
 								queue_frontier.append(w_pt)
 								frontier_open_list[w_pt] = w_pt # mark w as " Frontier -Open - List "
-					frontier_close_list[(u, v)] = (u, v) # mark q as frontier close list
-							
+					frontier_close_list[q] = q # mark q as frontier close list
+						
 				contiguous_frontiers.append(new_frontier) # save data of NewFrontier
 				for pt in new_frontier:
 					map_close_list[pt] = pt # mark all points of NewFrontier as "Map -Close - List"
-				
+					
 			for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all v in neighbors (p):
 				v = (p[0] + dx, p[1] + dy)
-				if not v in map_open_list and not v in map_close_list: # if v not marked as {"Map -Open - List ","Map -Close - List "}
-					for (dx1, dy1) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # and v has at least one "Map -Open - Space " neighbor :
-						neighbor_v = (v[0] + dx1, v[1] + dy1)
-						print(self.cellAt(neighbor_v[0], neighbor_v[1]))
-						if self.isPointInGrid(neighbor_v[0], neighbor_v[1]) and self.cellAt(neighbor_v[0], neighbor_v[1]) == OCCUPANCY_GRID_FREE_SPACE:
-							print('here3')
-							queue_map.append((p[0] + dx, p[1] + dy))
-							map_open_list[(p[0] + dx, p[1] + dy)] = (p[0] + dx, p[1] + dy) # mark v as "Map -Open - List "
-							break
+				isNeighborOpenSpace = False
+				for (dx1, dy1) in ((1, 0), (0, 1), (-1, 0), (0, -1)):
+					neighbor_v = (v[0] + dx1, v[1] + dy1)
+					# print('neighbor_v: ', neighbor_v, self.cellAt(neighbor_v[0], neighbor_v[1]))
+					if self.cellAt(neighbor_v[0], neighbor_v[1]) == OCCUPANCY_GRID_FREE_SPACE:
+						isNeighborOpenSpace = True
+						break
+				if not v in map_open_list and not v in map_close_list and isNeighborOpenSpace:
+					queue_map.append(v)
+					map_open_list[v] = v # mark v as "Map -Open - List "
 
 			map_close_list[p] = p # mark p as "Map -Close - List"
 
-			print('Ending wavefront...')
-			return contiguous_frontiers
+		print('Ending wavefront...')
+		return contiguous_frontiers
 
 class RobotDog:
 	"""Robot's Main Class"""
@@ -622,7 +623,8 @@ class RobotDog:
 		t = tf.transformations.translation_matrix(self.trans)
 		R = tf.transformations.quaternion_matrix(self.rot)
 		o_T_b = t.dot(R) # base to odom transformation matrix, used to convert
-		(robotX, robotY) = [o_T_b[0,3], o_T_b[1,3]]
+		(robotX, robotY) = [int(o_T_b[0,3]), int(o_T_b[1,3])]
+		print('Current value of occupancy grid at current robot pos: ', self.occGrid.cellAt(robotX, robotY))
 
 		bot_pt_grid = grid_T_odom.dot(np.transpose([robotX, robotY, 0, self.occGrid.resolution])) * (1 / self.occGrid.resolution)
 		bot_x_grid = np.ceil(bot_pt_grid.item(0, 0)).astype(int)
