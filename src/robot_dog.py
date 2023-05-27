@@ -260,6 +260,19 @@ class Grid:
 		print('Ending wavefront...')
 		return contiguous_frontiers
 
+	def findBestPoint(self, points):
+		bestPoint = points[0]
+		lowestSumSq = self.width * self.height # cannot be more than the number of nodes in the graph
+		for p in points:
+			sumSq = 0
+			for q in points:
+				sumSq += (q[0] - p[0]) * (q[0] - p[0])  + (q[1] - p[1]) * (q[1] - p[1]) 
+			if sumSq < lowestSumSq:
+				bestPoint = p
+				lowestSumSq = sumSq
+   
+		return bestPoint
+
 class RobotDog:
 	"""Robot's Main Class"""
 	def __init__(self):
