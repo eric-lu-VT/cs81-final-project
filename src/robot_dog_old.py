@@ -19,6 +19,7 @@ from nav_msgs.msg import Odometry
 import tf  # library for transformations.
 from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import Pose
+from geometry_msgs.msg import PointStamped
 
 # Constants.
 # Topic names
@@ -28,7 +29,7 @@ MAP_TOPIC = '/map'
 ODOM_TOPIC = '/odom'
 # For simulator, 'base_laser_link'; for real robot, 'base_scan'
 BLL_TOPIC = '/base_laser_link'
-
+POINT_STAMPED_TOPIC = '/point_stamped'
 
 # Frequency at which the loop operates
 FREQUENCY = 10  # Hz.
@@ -44,9 +45,9 @@ OCCUPANCY_GRID_OCCUPIED = 100
 # Min probability in occupancy grid (by ros specs.) Representing free space
 OCCUPANCY_GRID_FREE_SPACE = 0
 OCCUPANCY_GRID_UNKNOWN = -1  # Representing unseen cell in occupancy grid
-RESOLUTION = 1  # m/cell
-GRID_WIDTH_M = 100  #  m
-GRID_HEIGHT_M = 100  # m
+RESOLUTION = 0.1  # m/cell
+GRID_WIDTH_M = 500  #  m
+GRID_HEIGHT_M = 500  # m
 
 # Field of view in radians that is checked in front of the robot
 MIN_SCAN_ANGLE_RAD = -45.0 / 180 * math.pi; # must be experimentally determined
@@ -142,7 +143,7 @@ class Grid:
 						
 			isFrontierPoint = False
 			for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)):
-				if self.isPointInGrid(p[0] + dx, p[1] + dy) and self.cellAt(p[0] + dx, p[1] + dy) == OCCUPANCY_GRID_FREE_SPACE and self.cellAt(p[0], p[1]) == OCCUPANCY_GRID_UNKNOWN:
+				if self.cellAt(p[0], p[1]) == OCCUPANCY_GRID_UNKNOWN and self.cellAt(p[0] + dx, p[1] + dy) == OCCUPANCY_GRID_FREE_SPACE:
 					isFrontierPoint = True
 					break
 			if isFrontierPoint: # if p is a frontier point
@@ -157,7 +158,7 @@ class Grid:
 										
 					isSecondFrontierPoint = False 
 					for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)):
-						if self.isPointInGrid(q[0] + dx, q[1] + dy) and self.cellAt(q[0], q[1]) == OCCUPANCY_GRID_UNKNOWN and self.cellAt(q[0] + dx, q[1] + dy) == OCCUPANCY_GRID_FREE_SPACE:
+						if self.cellAt(q[0], q[1]) == OCCUPANCY_GRID_UNKNOWN and self.cellAt(q[0] + dx, q[1] + dy) == OCCUPANCY_GRID_FREE_SPACE:
 							isSecondFrontierPoint = True
 							break
 					if isSecondFrontierPoint: # if q is a frontier point :
@@ -175,18 +176,36 @@ class Grid:
 						
 			for (dx, dy) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # for all v in neighbors (p):
 				v = (p[0] + dx, p[1] + dy)
-				if not v in map_open_list and not v in map_close_list: # if v not marked as {"Map -Open - List ","Map -Close - List "}
-					for (dx1, dy1) in ((1, 0), (0, 1), (-1, 0), (0, -1)): # and v has at least one "Map -Open - Space " neighbor :
-						neighbor_v = (v[0] + dx1, v[1] + dy1)
-						if self.cellAt(neighbor_v[0], neighbor_v[1]) == 0:
-							queue_map.append(v)
-							map_open_list[v] = v # mark v as "Map -Open - List "
-							break
+				isNeighborOpenSpace = False
+				for (dx1, dy1) in ((1, 0), (0, 1), (-1, 0), (0, -1)):
+					neighbor_v = (v[0] + dx1, v[1] + dy1)
+					# print('neighbor_v: ', neighbor_v, self.cellAt(neighbor_v[0], neighbor_v[1]))
+					if self.cellAt(neighbor_v[0], neighbor_v[1]) == OCCUPANCY_GRID_FREE_SPACE:
+						isNeighborOpenSpace = True
+						break
+				if not v in map_open_list and not v in map_close_list and isNeighborOpenSpace:
+					queue_map.append(v)
+					map_open_list[v] = v # mark v as "Map -Open - List "
 
 			map_close_list[p] = p # mark p as "Map -Close - List"
 				
 		print('Ending wavefront...')
 		return contiguous_frontiers
+
+	def findBestPoint(self, points):
+		bestPoint = points[0]
+		lowestSumSq = self.width * self.height
+		for p in points:
+			sumSq = 0
+			for q in points:
+				sumSq = 0
+				for q in points:
+					sumSq += (q[0] - p[0]) * (q[0] - p[0])  + (q[1] - p[1]) * (q[1] - p[1]) 
+				if sumSq < lowestSumSq:
+					bestPoint = p
+					lowestSumSq = sumSq
+     
+		return bestPoint
 
 class RobotDog():
 		def __init__(self, mode, linear_velocity=LINEAR_VELOCITY, angular_velocity=ANGULAR_VELOCITY):
@@ -209,7 +228,9 @@ class RobotDog():
 				# Setting up laser subscriber
 				self._laser_sub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan, self._laser_callback, queue_size=1)
 				# Setting up occupancy grid publisher
-				self._occupancy_grid_pub = rospy.Publisher(MAP_TOPIC, OccupancyGrid, latch=True)
+				self._occupancy_grid_pub = rospy.Publisher(MAP_TOPIC, OccupancyGrid, queue_size=1)
+				# Setting up PointStamped publisher
+				self._point_stamped_pub = rospy.Publisher(POINT_STAMPED_TOPIC, PointStamped, queue_size=1)
 
 				# Setting up transformation broadcaster, listener.
 				self.broadcaster = tf.TransformBroadcaster()
@@ -439,6 +460,56 @@ class RobotDog():
 										points.append((x, y))
 
 				return points
+
+		"""
+		Converts a PointStamped() of from_frame_id = '/odom' to to_frame_id = '/map' (and vice-versa)
+
+		Args:
+			pose: A PointStamped()
+			from_frame_id: origin frame
+			to_frame_id: target frame
+		Returns:
+			A PointStamped() of the opposite frame_id type
+		Raise:
+			Exception: Throws error if incorrect pairing of frame_ids
+		"""
+		def transform_point_stamped(self, pose, from_frame_id, to_frame_id):
+			(trans, rot) = self.listener.lookupTransform(MAP_TOPIC, ODOM_TOPIC, rospy.Time(0))
+			t = tf.transformations.translation_matrix(trans)
+			R = tf.transformations.quaternion_matrix(rot)
+			map_T_odom = t.dot(R)
+			odom_T_map = numpy.linalg.inv(map_T_odom)
+
+			if from_frame_id == ODOM_TOPIC and to_frame_id == MAP_TOPIC:
+				x = pose.position.x
+				y = pose.position.y
+				z = pose.position.z
+				map_pt = map_T_odom.dot(numpy.transpose([x, y, z, 1]))
+
+				map_pose = Pose()
+				map_pose.header.stamp = rospy.Time.now()
+				map_pose.header.frame_id = MAP_TOPIC
+				map_pose.position.x = map_pt.item(0)
+				map_pose.position.y = map_pt.item(1)
+				map_pose.position.z = map_pt.item(2)
+				map_pose.orientation = pose.orientation  # TODO: Account for transform?
+				return map_pose
+			elif from_frame_id == MAP_TOPIC and to_frame_id == ODOM_TOPIC:
+				x = pose.position.x
+				y = pose.position.y
+				z = pose.position.z
+				odom_pt = odom_T_map.dot(numpy.transpose([x, y, z, 1]))
+
+				odom_pose = Pose()
+				odom_pose.header.stamp = rospy.Time.now()
+				odom_pose.header.frame_id = ODOM_TOPIC
+				odom_pose.position.x = odom_pt.item(0)
+				odom_pose.position.y = odom_pt.item(1)
+				odom_pose.position.z = odom_pt.item(2)
+				odom_pose.orientation = pose.orientation  # TODO: Account for transform?
+				return odom_pose
+			else:
+				raise Exception('provided frame_id(s) are invalid')
 		
 		def wavefront(self):
 				mox = self.map.origin.orientation.x
@@ -452,14 +523,30 @@ class RobotDog():
 					[0, 0, 1, self.map.origin.position.z],
 					[0, 0, 0, 1]
 				])
+				odom_T_grid = numpy.linalg.inv(grid_T_odom)
 
 				bot_pt_grid = grid_T_odom.dot(numpy.transpose([self.x, self.y, 0, self.map.resolution])) * (1 / self.map.resolution)
 				bot_x_grid = numpy.ceil(bot_pt_grid.item(0, 0)).astype(int)
 				bot_y_grid = numpy.ceil(bot_pt_grid.item(0, 1)).astype(int)
 				print('Current value of occupancy grid at current robot pos: ', self.map.cellAt(bot_x_grid, bot_y_grid))
 
-				res = self.map.getWavefrontPoints(bot_x_grid, bot_y_grid)
-				print(len(res))
+				frontiers = self.map.getWavefrontPoints(bot_x_grid, bot_y_grid)
+				print('frontiers', len(frontiers))
+				target_points = []
+				for frontier in frontiers:
+					target_points.append(self.map.findBestPoint(frontier))
+				print('here1')
+				for point in target_points:
+					pointMessage = PointStamped()
+					pointMessage.header.stamp = rospy.Time.now()
+					pointMessage.header.frame_id = ODOM_TOPIC
+					pt_odom = odom_T_grid.dot(numpy.transpose([point[0], point[1], 0, 2])) * self.map.resolution
+					pointMessage.point.x = numpy.ceil(pt_odom.item(0, 0)).astype(int)
+					pointMessage.point.y = numpy.ceil(pt_odom.item(0, 1)).astype(int)
+					print(pointMessage) # TODO: Temp
+     				self._point_stamped_pub.publish(pointMessage)
+				
+				print(len(target_points))
 
 		"""
 		Class main function
@@ -469,7 +556,7 @@ class RobotDog():
 				rospy.Rate(FREQUENCY).sleep()
 
 				if self.selected_mode == 1:
-						self.translate(1)
+						self.translate(0.5)
 						self.wavefront()
 						# self.rotate_rel(numpy.pi / 2)
 				elif self.selected_mode == 2:   # Select this mode so that all movement is done from the command line
