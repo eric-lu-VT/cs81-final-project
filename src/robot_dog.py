@@ -17,8 +17,8 @@ import tf
 # http://docs.ros.org/en/noetic/api/nav_msgs/html/msg/OccupancyGrid.html
 from std_msgs.msg import Header
 from nav_msgs.msg import OccupancyGrid, MapMetaData
-from geometry_msgs.msg import Pose, Twist, PoseArray
-from sensor_msgs.msg import LaserScan
+from geometry_msgs.msg import Pose, Twist, PoseArray, Point32
+from sensor_msgs.msg import LaserScan, PointCloud
 
 """CONSTANTS"""
 # Topic names
@@ -31,6 +31,7 @@ DEFAULT_BASE_FRAME = 'base_link'
 DEFAULT_LASER_FRAME = 'base_laser_link' # for simulation
 # Movement publisher
 DEFAULT_CMD_VEL_TOPIC = 'cmd_vel'
+DEFAULT_POINT_CLOUD_TOPIC = 'point_cloud'
 
 NODE_NAME = 'robotDog'
 
@@ -65,6 +66,8 @@ OCCUPANCY_GRID_UNKNOWN = -1  # Representing unseen cell in occupancy grid
 GRID_WIDTH_M = 150.0 # width of the grid in meters
 GRID_HEIGHT_M = 150.0 # height of the grid in meters
 GRID_RESOLUTION = 0.05 # resolution of the grid in meters/cell
+MIN_FRONTIER_SIZE = 50 # wrt map reference frame
+CLOSE_DIST_THRESHOLD = 15 # wrt odom reference frame, maximum distance (in m) between points to consider them the "same"
 
 # states
 STATE_IDLE = 0
@@ -140,6 +143,11 @@ class Grid:
 		# first offset by the origin of the grid, then divide by resolution
 		return (int((x - self.originPose.position.x) / self.resolution),\
 	  		int((y - self.originPose.position.y) / self.resolution))
+  
+	def getWorldCoordinates(self, x, y):
+		"""Converts from grid coordinates to continuous world coordinates."""
+		return (int(x * self.resolution + self.originPose.position.x),\
+	  		int(y * self.resolution + self.originPose.position.y))
 	
 	def isPointInGrid(self, x, y):
 		return (0 <= y < len(self.grid) and 0 <= x < len(self.grid[0]))
@@ -238,7 +246,8 @@ class Grid:
 								frontier_open_list[w_pt] = w_pt # mark w as " Frontier -Open - List "
 					frontier_close_list[q] = q # mark q as frontier close list
 						
-				contiguous_frontiers.append(new_frontier) # save data of NewFrontier
+				if len(new_frontier) > MIN_FRONTIER_SIZE:
+					contiguous_frontiers.append(new_frontier) # save data of NewFrontier, but only if it is large enough
 				for pt in new_frontier:
 					map_close_list[pt] = pt # mark all points of NewFrontier as "Map -Close - List"
 					
@@ -260,19 +269,6 @@ class Grid:
 		print('Ending wavefront...')
 		return contiguous_frontiers
 
-	def findBestPoint(self, points):
-		bestPoint = points[0]
-		lowestSumSq = self.width * self.height # cannot be more than the number of nodes in the graph
-		for p in points:
-			sumSq = 0
-			for q in points:
-				sumSq += (q[0] - p[0]) * (q[0] - p[0])  + (q[1] - p[1]) * (q[1] - p[1]) 
-			if sumSq < lowestSumSq:
-				bestPoint = p
-				lowestSumSq = sumSq
-   
-		return bestPoint
-
 class RobotDog:
 	"""Robot's Main Class"""
 	def __init__(self):
@@ -281,6 +277,8 @@ class RobotDog:
 		self.cmdVelPub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
 		# publish our occupancy grid to map
 		self.occGridPub = rospy.Publisher(DEFAULT_MAP_TOPIC, OccupancyGrid, queue_size=1)
+		# publish PointCloud
+		self.pointCloudPub = rospy.Publisher(DEFAULT_POINT_CLOUD_TOPIC, PointCloud, queue_size=1)
 		# laser/LiDAR subscription
 		self.laserSub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan, self._laser_callback, queue_size=1)
 		# listener for transforms
@@ -306,8 +304,7 @@ class RobotDog:
 		self.trans = None # most recent translation from odom to base_link
 		self.rot = None # most recent rotation from odom to base_link
 
-		self.targetNode = (0, 0)
-		self.poseArray = None # array of poses for the robot to follow
+		self.frontierCenters = []
 
 		self.state = STATE_IDLE # current state of the robot
 
@@ -474,12 +471,15 @@ class RobotDog:
 	
 	"""Path Planning Functions"""
 
-	def planPath(self, goal):
+	def planPath(self, goal, isGoalInGridRefFrame):
 		"""
 		Plan a path to the goal using the occGrid stored in self.occGrid.
 
 		Args:
 			goal: a tuple of (x, y) coordinates of the goal in the odom frame
+			isGoalInGridRefFrame: True if goal is in the grid reference frame; False otherwise.
+		Returns:
+			PoseArray() representing path, or None if no path was found
 		"""
 		# get the current position of the robot in the map frame
 		# use self.tfListener to get the transform from map to base_link
@@ -491,7 +491,7 @@ class RobotDog:
 		self.occGrid.expandWalls()
 
 		# use BFS with history to find the path to the goal as a list of (x, y)
-		BFSpath = self.BFS((currentX, currentY), goal)
+		BFSpath = self.BFS((currentX, currentY), goal, isGoalInGridRefFrame)
 		if BFSpath == None:
 			print("No path found to goal: " + str(goal) + " from current position: " + str((currentX, currentY)))
 			return
@@ -530,16 +530,16 @@ class RobotDog:
 			# add the pose to the PoseArray
 			path.poses.append(pose)
 		
-		# assign it to our member variable
-		self.poseArray = path
+		return path
 	
-	def BFS(self, start, goal):
+	def BFS(self, start, goal, isGoalInGridRefFrame):
 		"""Breadth-first search to find the path to the goal."""
 		# define start and end as grid indices
 		start = self.occGrid.getGridCoordinates(start[0], start[1])
-		goal = self.occGrid.getGridCoordinates(goal[0], goal[1])
-
-		print("Planning path from " + str(start) + " to " + str(goal) + "...")
+		if not isGoalInGridRefFrame:
+			goal = self.occGrid.getGridCoordinates(goal[0], goal[1])
+			
+		print("Planning path from " + str(start) + " to " + str(goal) + "... ", self.occGrid.cellAt(goal[0], goal[1])) # TODO: Temp
 
 		# maintain a queue of tuples of (parent, node)
 		frontier = [(start, None)]
@@ -592,16 +592,47 @@ class RobotDog:
 				visited.add(neighbor)
 
 		# if the queue is empty and the goal has not been found, return None
-		print("No path found to goal: " + str(goal))
+		print("No path from: " + str(start) + " to: " + str(goal))
 		return None
 
-	def followPath(self):
-		"""Follow the path stored in self.poseArray. Assumes this is not none."""
-		if self.poseArray is None:
+	def addNewPaths(self, frontiers):
+		print('Starting addNewPaths...')
+		bestPoints = []
+  		for frontier in frontiers:
+			bestPoint = frontier[0]
+			lowestSumSq = self.occGrid.width * self.occGrid.height # cannot be more than the number of nodes in the graph
+			for p in frontier:
+				sumSq = 0
+				for q in frontier:
+					sumSq += (q[0] - p[0]) * (q[0] - p[0]) + (q[1] - p[1]) * (q[1] - p[1]) 
+				if sumSq < lowestSumSq:
+					bestPoint = p
+					lowestSumSq = sumSq
+     
+			bestPoints.append(bestPoint)
+   
+		for newGridPoint in bestPoints:
+			newWorldPoint = self.occGrid.getWorldCoordinates(newGridPoint[0], newGridPoint[1])
+			# print('point, worldPoint: ', point, worldPoint) TODO: Temp
+			addFlag = True # Do not add point if it is close enough to other points already in oldFrontierCenters
+			for (existingWorldPoint, existingGridPoint) in self.frontierCenters:
+				dx = existingWorldPoint[0] - newWorldPoint[0]
+				dy = existingWorldPoint[1] - newWorldPoint[1]
+				if np.sqrt(dx*dx + dy*dy) < CLOSE_DIST_THRESHOLD:
+					addFlag = False
+					break
+			if addFlag:
+				# print('adding worldPoint: ', worldPoint) TODO: Temp
+				self.frontierCenters.append((newWorldPoint, newGridPoint))
+				self.occGrid.setCellAt(newGridPoint[0], newGridPoint[1], OCCUPANCY_GRID_FREE_SPACE) # So that BFS works
+
+	def followPath(self, poseArray):
+		"""Follow the path stored in poseArray"""
+		if poseArray is None:
 			print("No poseArray to follow")
 			return
 		
-		path = self.poseArray.poses
+		path = poseArray.poses
 		for i in range(len(path)):
 			# convert pose to be in base_link frame
 			(trans, rot) = self.tfListener.lookupTransform(DEFAULT_BASE_FRAME, DEFAULT_ODOM_FRAME, rospy.Time(0))
@@ -639,36 +670,77 @@ class RobotDog:
 				msg = self.occGrid.getOccupancyGridMsg()
 				self.occGridPub.publish(msg)
 			
-			
-			self.planPath(self.occGrid.getNextTarget())
-			print("Path planned.")
-			self.followPath()
-			print("goal reached")
+			# self.planPath(self.occGrid.getNextTarget())
+			# print("Path planned.")
+			# self.followPath()
+			# print("goal reached")
 
 			rate.sleep()
 
 	def getFrontiers(self):
-		t = tf.transformations.translation_matrix(self.trans)
-		R = tf.transformations.quaternion_matrix(self.rot)
-		o_T_b = t.dot(R) # base to odom transformation matrix, used to convert
-		(robotX, robotY) = [int(o_T_b[0,3]), int(o_T_b[1,3])]
-		print('Current value of (robotX, robotY): ', self.occGrid.cellAt(robotX, robotY))
+		# get the current position of the robot in the map frame
+		# use self.tfListener to get the transform from map to base_link
+		(translation, rotation) = self.tfListener.lookupTransform(DEFAULT_ODOM_FRAME, DEFAULT_BASE_FRAME, rospy.Time(0))
+  		robotOdom = self.occGrid.getGridCoordinates(translation[0], translation[1])
+		print('Current value of', robotOdom[0], robotOdom[1], ': ', self.occGrid.cellAt(robotOdom[0], robotOdom[1])) # TODO: Temp
 
-		res = self.occGrid.getWavefrontPoints(robotX, robotY)
-		print('Number of frontiers: ', len(res))
-	
+		frontiers = self.occGrid.getWavefrontPoints(robotOdom[0], robotOdom[1])
+		print('Number of frontiers: ', len(frontiers)) # TODO: Temp
+		self.addNewPaths(frontiers)
+		print('Number of frontierCenters: ', len(self.frontierCenters)) # TODO: Temp
+		
+		pointCloudMessage = PointCloud()
+		pointCloudMessage.header.stamp = rospy.Time.now()
+		pointCloudMessage.header.frame_id = DEFAULT_ODOM_FRAME
+  		pointCloudMessage.points = []
+  		for (odomPoint, gridPoint)  in self.frontierCenters:
+			pointMessage = Point32()
+			pointMessage.x = odomPoint[0]
+			pointMessage.y = odomPoint[1]
+			pointMessage.z = 0
+			pointCloudMessage.points.append(pointMessage)
+			print('pointCloud item: ', pointMessage.x, pointMessage.y) # TODO: Temp
+		
+  		self.pointCloudPub.publish(pointCloudMessage)
+		print('Done getFrontiers') # TODO: Temp
+
 	def main(self):
 		"""
 		Driver function
-		"""	
-		self.translate(0.5)
-		self.fillOccupancyGrid()
-		# publish it
-		msg = self.occGrid.getOccupancyGridMsg()
-		self.occGridPub.publish(msg)
-		
-		self.getFrontiers()
-		self.stop()
+		"""
+		rate = rospy.Rate(FREQUENCY)
+  
+		while not rospy.is_shutdown():
+			# check if we have a new laser message
+			if self.freshLaser:
+				# reset the flag
+				self.freshLaser = False
+
+				# fill the occupancy grid with the current laser data
+				self.fillOccupancyGrid()
+
+				# publish it
+				msg = self.occGrid.getOccupancyGridMsg()
+				self.occGridPub.publish(msg)
+				self.getFrontiers()
+			
+			if len(self.frontierCenters) > 0:
+				randIdx = np.random.randint(len(self.frontierCenters))
+				(odomPoint, gridPoint) = self.frontierCenters[randIdx]
+				del self.frontierCenters[randIdx]
+				
+				nextPoseArray = self.planPath(gridPoint, True)
+				print('length of nextPoseArray: ', len(nextPoseArray.poses)) # TODO: Temp
+				self.followPath(nextPoseArray) # hook nextTarget
+				print("goal reached")
+			else:
+				print('Done frontier navigation.') # TODO: Temp
+				self.stop()
+				break
+
+			rate.sleep()
+  
+		# self.stop()
 
 if __name__ == "__main__":
 	rospy.init_node(NODE_NAME)
