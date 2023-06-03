@@ -1,6 +1,6 @@
 # README.md - CS81 Final Project
 
-This CS81 Final Project
+This project provides an implementation of a robotic dog that is capable of searching a foreign environment for a target object (“ball”) and returning the object to a specified location using laser sensor and camera data. As a consequence of our implementation, the robot is also capable of mapping the explored environment as it proceeds in its search. We demonstrate through use of an OccupancyGrid paired with a laser sensor, a novel frontier-exploration algorithm, computer vision object detection and tracking using OpenCV and a camera, and a PD controller for object retrieval movement patterns that our robot dog implementation is capable of autonomously completing the specified task.
 
 Authors: Eric Lu, Jordan Kirkbride, Julian Wu, Wendell Wu
 
@@ -9,8 +9,6 @@ Authors: Eric Lu, Jordan Kirkbride, Julian Wu, Wendell Wu
 ### Local Environment
 
 These setup instructions assume that you have already [set up the ROS development environment](https://canvas.dartmouth.edu/courses/58298/pages/instructions-for-setting-up-ros-directly-ubuntu-or-docker) **through Docker**.
-
-First and foremost, make sure to change the laser scan topic name in the code to `base_scan`, and base laser link topic to `base_laser_link`.
 
 To download the program to your local PC environment:
 
@@ -37,57 +35,10 @@ To run the program locally on the PC:
 8. `cd ~/catkin_ws/src` and run `rviz`
 9. Open your web browser to `localhost:8080/vnc.html` and click connect.
 10. On rviz: Go to "panels" in the menu bar, then hit add new panel, then hit tool properties. This should bring up a sidebar to the left.
-11. In the sidebar, click add > by topic > /map > set topic to `/map` 
-12. On a *fifth* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
-13. `cd ~/catkin_ws/src` and choose one of the following:
-    - To run pre-determined motion (mostly for simulation): `rosrun cs77-final-project robot_dog.py 1`
-    - To let all motion be determined from the command line: `rosrun cs81-final-project robot_dog.py 2`
-14. The robot should now be moving in the VNC viewer on the browser, and there should also be a OccupancyGrid mapping in the rviz.
-    - To see the OccupancyGrid mapping, you may need to zoom out focal point (on the right sidebar in rviz)
-
-### Robot Environment
-
-These setup instructions assume that you are using one of the Turtlebot 3 robots provided by Prof. Li. 
-Let # be the id of the robot you are using; this will be used in the instructions below.
-
-First and foremost, make sure to change the laser scan topic name in the code to `scan` and the base laser link topic to `base_scan`.
-
-To download the program to the robot:
-
-1. `ssh dartmouth@192.168.111.11`
-   - password: `Robotics&7`
-2. `sudo apt-get install tmux` if the robot does not already have tmux
-3. `cd ~/catkin_ws/src` and run `catkin_create_pkg cs81-final-project std_msgs rospy` to create a new catkin package with the necessary dependencies
-4. `cd ~/catkin_ws` and run `catkin_make` to update the packages in the catkin workspace
-5. On a *second* terminal, navigate to the directory that contains the file `robot_dog.py`
-6. Copy over files to robot with `scp -r robot_dog.py dartmouth@192.168.111.11:~/catkin_ws/src/cs81-final-project/src`
-   - password: `Robotics&7`
-
-To run the program on the robot:
-
-1. `ssh dartmouth@192.168.111.11`
-   - password: `Robotics&7`
-2. Open *first* tmux terminal with `tmux`
-3. Run `roslaunch turtlebot3_bringup turtlebot3_robot.launch`
-4. Ctrl b + d to exit the first tmux terminal
-5. Open *second* tmux terminal with `tmux`
-6. `cd ~/catkin_ws/src/cs81-final-project/src/`
-7. Start running the robot:
-    - To run pre-determined motion (mostly for simulation): `rosrun cs81-final-project robot_dog.py 1`
-    - To let all motion be determined from the command line: `rosrun cs81-final-project  robot_dog.py 2`
-
-Note that to open teleoperation, run `rosrun turtlebot3_teleop turtlebot3_teleop_key` from a new terminal connected to `ssh dartmouth@192.168.111.11`
-
-To access `rviz` while running the program on the robot:
-
-1. Navigate to your ROS development directory and run `docker-compose up --build`
-2. On a *second* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
-3. Run `export ROS_MASTER_URI=http://192.168.111.11:11311`
-   - You can verify that the `ROS_MASTER_URI` was changed with `env | grep ROS`
-   - You can verify that the real robot frames can be accessed with `rostopic list`
-4. `cd ~/catkin_ws/src` and run `rviz`
-5. Open your web browser to `localhost:8080/vnc.html` and click connect.
-6. On rviz: Go to "panels" in the menu bar, then hit add new panel, then hit tool properties. This should bring up a sidebar to the left.
-7. In the sidebar, find Global Options > Fixed Frame > set frame to `odom`
-8. In the sidebar, click add > by topic > /map > set topic to `/map`
-9. Follow the instructions 'run the program on the robot' as listed in the previous section.
+11. In the left sidebar, click Global Options > Fixed Frame > change to "odom"
+12. In the left sidebar, click add > By display type > Map. Then change its topic name to "map"
+13. In the left sidebar, click add > By display type > PointCloud. Then change its topic name to "point_cloud", and size to 1m (so that it can be more easily seen in rviz)
+14. On a *fifth* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
+15. `cd ~/catkin_ws/src` and run `rosrun cs77-final-project robot_dog.py`
+16. The robot should now be moving in the VNC viewer on the browser, and there should also be a OccupancyGrid mapping in the rviz.
+   - To see the OccupancyGrid mapping, you may need to change the focal point (on the right sidebar in rviz)
