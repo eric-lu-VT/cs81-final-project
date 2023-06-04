@@ -32,6 +32,8 @@ FREQUENCY = 10 #Hz.
 LINEAR_VELOCITY = 0.2 # m/s
 ANGULAR_VELOCITY = 0.2 # rad/s
 MAX_LASER_RANGE = 9.5 # meters for simulation
+MIN_SCAN_ANGLE_RAD = -10.0 / 180 * math.pi # Min field of view, in radians, that is checked by the robot for wall distance.
+MAX_SCAN_ANGLE_RAD = +10.0 / 180 * math.pi # Max field of view, in radians, that is checked by the robot for wall distance.
 ROBOT_SIZE = 0.2 # roughly .2m for turtlebot (defined from tutorial.inc)
 OCCUPANCY_GRID_OCCUPIED = 100
 OCCUPANCY_GRID_FREE_SPACE = 0
@@ -43,9 +45,9 @@ MIN_FRONTIER_SIZE = 5 # wrt map reference frame
 CLOSE_DIST_THRESHOLD = 1 # wrt odom reference frame, maximum distance (in m) between points to consider them the "same"
 STATE_IDLE = 0
 STATE_MOVING = 1
-FREQUENCY = 10
+FREQUENCY = 10 # Frequency at which the movement loops operate
 
-class Grid: # Wendall & Eric
+class Grid: # Wendell & Eric
     """
     A class representing the occupancy grid map. Mostly taken from Wendell's PA4 
     Code, and added more functionality to enable publishing/manipulation.
@@ -53,6 +55,7 @@ class Grid: # Wendall & Eric
     def __init__(self, width, height, resolution, origin):
         """Initialize an empty map grid with everything
         marked as -1 (unknown) message."""
+        "Author: Wendell"
         # turn the grid's occupancy data into a np array of the correct
         # dimensions
         self.width = int(width / resolution) # width of the map in cells
@@ -66,6 +69,7 @@ class Grid: # Wendall & Eric
     
     def getOccupancyGridMsg(self):
         """Return the occupancy grid as a ROS OccupancyGrid message."""
+        "Author: Wendell"
         # create the message
         msg = OccupancyGrid()
 
@@ -90,6 +94,7 @@ class Grid: # Wendall & Eric
 
     def cellAt(self, x, y):
         """Returns the value of the cell at the given coordinates."""
+        "Author: Wendell"
         if not self.isPointInGrid(x, y): # out of grid boundaries
             return OCCUPANCY_GRID_OCCUPIED
         # assume row-major order
@@ -97,6 +102,7 @@ class Grid: # Wendall & Eric
     
     def cellAtExpanded(self, x, y):
         """Returns the value of the cell at the given coordinates."""
+        "Author: Wendell"
         # assume row-major order
         return self.expandedGrid[y, x]
     
@@ -108,10 +114,12 @@ class Grid: # Wendall & Eric
         - 100: occupied
         - -1: unknown
         """
+        "Author: Wendell"
         self.grid[y, x] = value
     
     def getGridCoordinates(self, x, y):
         """Converts from continuous world coordinates to grid coordinates."""
+        "Author: Wendell"
         # first offset by the origin of the grid, then divide by resolution
         return (int((x - self.originPose.position.x) / self.resolution),\
             int((y - self.originPose.position.y) / self.resolution))
@@ -136,6 +144,7 @@ class Grid: # Wendall & Eric
         Guarantees that self.expandedGrid is a copy of the most
         recent self.grid with the walls expanded by the size of the robot.
         """
+        "Author: Wendell"
         # how much to expand the walls by, based on the size of the robot and
         # the resolution of the map. units are in cells, ceil to round up.
         expansion = int(math.ceil(ROBOT_SIZE / self.resolution))
@@ -233,9 +242,10 @@ class Grid: # Wendall & Eric
 
         return contiguous_frontiers
 
-class RobotDog: # Jordan and Julian
+class RobotDog: # Image processing: Jordan and Julian. Path planning: Wendell. Frontier exploration + integration with other parts: Eric
     def __init__(self):
         """set up subscribers and publishers"""
+        "Authors: Eric, Wendell, Jordan, Julian"
         # movement publisher to cmd_vel
         self.cmdVelPub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
         # publish our occupancy grid to map
@@ -308,6 +318,7 @@ class RobotDog: # Jordan and Julian
         
     def _laser_callback(self, msg):
         """Processing of laser message."""
+        "Authors: Wendell, Jordan"
         # store laser message for use by our main while loop
         self.laserMsg = msg
         self.freshLaser = True
@@ -331,6 +342,7 @@ class RobotDog: # Jordan and Julian
             self.pd_controller()
 
     def pd_controller(self):
+        "Author: Jordan"
         # Travel to the ball if not already there
         if not self.reached_ball:
             self.x_error = self.distance_from_ball
@@ -352,6 +364,7 @@ class RobotDog: # Jordan and Julian
             self.stop()
 
     def pd_helper(self, x_error, y_error):
+        "Author: Jordan"
         # Calculate angle to the goal position
         target_angle = math.atan2(y_error, x_error)
         # Calculate current robot orientation
@@ -371,6 +384,7 @@ class RobotDog: # Jordan and Julian
         self.move(self.linearVel, w)
     
     def _odom_callback(self, msg):
+        "Author: Jordan"
         # Get x, y from odom and calculate theta
         self.odometry_x = msg.pose.pose.position.x
         self.odometry_y = msg.pose.pose.position.y
@@ -378,6 +392,7 @@ class RobotDog: # Jordan and Julian
 
     # Inspired from: https://www.youtube.com/watch?v=-YCcQZmKJtY&ab_channel=D%C3%A1vidDud%C3%A1s
     def _camera_callback(self, camera_data):
+        "Author: Julian"
         try:
             cv_image = self.bridge.imgmsg_to_cv2(camera_data, desired_encoding="bgr8")
             image = cv_image
@@ -438,12 +453,14 @@ class RobotDog: # Jordan and Julian
             print(e)
 
     def getDistanceFromBall(self, contours):
+        "Author: Julian"
         cnt = contours[0]
         self.perceived_ball_area = cv2.contourArea(cnt) 
         self.perceived_ball_perimeter = cv2.arcLength(cnt,True) 
         self.distance_from_ball = ((self.known_ball_size * math.pi) * self.focal_length * 100000) / self.perceived_ball_area
 
     def image2rgb(self, image):
+        "Author: Julian"
         R = image[:, :, 2]
         G = image[:, :, 1]
         B = image[:, :, 0]
@@ -452,6 +469,7 @@ class RobotDog: # Jordan and Julian
     
     # Apply threshold and result a binary image
     def thresholdBinary(self, img, thresh=(220, 255)):
+        "Author: Julian"
         binary = np.zeros_like(img)
         binary[(img >= thresh[0]) & (img <= thresh[1])] = 1
 
@@ -460,11 +478,13 @@ class RobotDog: # Jordan and Julian
     """Movement Functions"""
 
     def stop(self):
+        "Author: Wendell"
         """Stop the robot."""
         self.move(0, 0)
 
     def move(self, linearVel, angularVel):
         """Send a velocity command (linear vel in m/s, angular vel in rad/s)."""
+        "Author: Wendell"
         # Setting velocities.
         twistMsg = Twist()
 
@@ -473,6 +493,7 @@ class RobotDog: # Jordan and Julian
         self.cmdVelPub.publish(twistMsg)
 
     def moveForDuration(self, linearVel, angularVel, dur):
+        "Author: Wendell"
         rate = rospy.Rate(FREQUENCY)
         # publish move command for certain time
         startTime = rospy.Time.now()
@@ -483,6 +504,7 @@ class RobotDog: # Jordan and Julian
         self.stop()
         
     def translate(self, distance):
+        "Author: Wendell"
         """Move the robot a certain distance in meters.
         Positive distance is forward, negative is backward."""
         moveTime = abs(distance / self.linearVel)
@@ -490,6 +512,7 @@ class RobotDog: # Jordan and Julian
         self.moveForDuration(self.linearVel * direction, 0, moveTime)
 
     def rotateRelative(self, angle):
+        "Author: Wendell"
         """Rotate the robot by a certain angle in radians from its current
         angle. Could be positive or negative."""
         rotateTime = abs(angle / self.angularVel)
@@ -497,6 +520,7 @@ class RobotDog: # Jordan and Julian
         self.moveForDuration(0, self.angularVel * direction, rotateTime)
         
     def fillEmptyCellsBetween(self, x0, y0, x1, y1):
+        "Author: Wendell"
         """Directly translated from the Bresenham Line Algorithm pseudocode
         provided on Wikipedia for all cases. Perform a single ray trace and
         marks all cells between x0, y0 and x1, y1 as unoccupied (0)."""
@@ -512,6 +536,7 @@ class RobotDog: # Jordan and Julian
                 self.fillLineHigh(x0, y0, x1, y1)
         
     def fillLineLow(self, x0, y0, x1, y1):
+        "Author: Wendell"
         # Called by fillEmptyCellsBetween()
         dx = x1 - x0
         dy = y1 - y0
@@ -532,6 +557,7 @@ class RobotDog: # Jordan and Julian
                 D = D + (2 * dy)
     
     def fillLineHigh(self, x0, y0, x1, y1):
+        "Author: Wendell"
         # Called by fillEmptyCellsBetween()
         dx = x1 - x0
         dy = y1 - y0
@@ -555,12 +581,11 @@ class RobotDog: # Jordan and Julian
         """Helper function/subroutine to fill the occupancy grid with the
         current data from the laser sensor using the Bresenham
         Line Algorithm/Ray Tracing."""
+        "Author: Wendell"
         
-        print('Starting fillOccupancyGrid....')
         while self.trans == None:
             temp = 0
         
-        print('Got trans')
         # from base frame to odom coordinates
         t = tf.transformations.translation_matrix(self.trans)
         R = tf.transformations.quaternion_matrix(self.rot)
@@ -606,6 +631,7 @@ class RobotDog: # Jordan and Julian
         Returns:
             PoseArray() representing path, or None if no path was found
         """
+        "Author: Wendell"
         # get the current position of the robot in the map frame
         # use self.tfListener to get the transform from map to base_link
         (translation, rotation) = self.tfListener.lookupTransform(DEFAULT_ODOM_FRAME, DEFAULT_BASE_FRAME, rospy.Time(0))
@@ -659,12 +685,13 @@ class RobotDog: # Jordan and Julian
         
     def BFS(self, start, goal, isGoalInGridRefFrame):
         """Breadth-first search to find the path to the goal."""
+        "Author: Wendell"
         # define start and end as grid indices
         start = self.occGrid.getGridCoordinates(start[0], start[1])
         if not isGoalInGridRefFrame:
             goal = self.occGrid.getGridCoordinates(goal[0], goal[1])
             
-        print("Planning path from " + str(start) + " to " + str(goal) + "... ", self.occGrid.cellAt(goal[0], goal[1])) # TODO: Temp
+        print("Planning path from " + str(start) + " to " + str(goal) + "... ", self.occGrid.cellAt(goal[0], goal[1]))
 
         # maintain a queue of tuples of (parent, node)
         frontier = [(start, None)]
@@ -717,7 +744,6 @@ class RobotDog: # Jordan and Julian
                 visited.add(neighbor)
 
         # if the queue is empty and the goal has not been found, return None
-        print("No path from: " + str(start) + " to: " + str(goal))
         return None
         
     def addNewPaths(self, frontiers):
@@ -740,7 +766,6 @@ class RobotDog: # Jordan and Julian
 
         for newGridPoint in bestPoints:
             newWorldPoint = self.occGrid.getWorldCoordinates(newGridPoint[0], newGridPoint[1])
-            # print('point, worldPoint: ', point, worldPoint) TODO: Temp
             addFlag = True # Do not add point if it is close enough to other points already in oldFrontierCenters
             for (existingWorldPoint, existingGridPoint) in self.frontierCenters:
                 dx = existingWorldPoint[0] - newWorldPoint[0]
@@ -749,12 +774,12 @@ class RobotDog: # Jordan and Julian
                     addFlag = False
                     break
             if addFlag:
-                # print('adding worldPoint: ', worldPoint) TODO: Temp
                 self.frontierCenters.append((newWorldPoint, newGridPoint))
                 self.occGrid.setCellAt(newGridPoint[0], newGridPoint[1], OCCUPANCY_GRID_FREE_SPACE) # So that BFS works
         
     def followPath(self, poseArray):
         """Follow the path stored in poseArray"""
+        "Author: Wendell"
         if poseArray is None:
             return
         
@@ -786,7 +811,6 @@ class RobotDog: # Jordan and Julian
         # use self.tfListener to get the transform from map to base_link
         (translation, rotation) = self.tfListener.lookupTransform(DEFAULT_ODOM_FRAME, DEFAULT_BASE_FRAME, rospy.Time(0))
         robotOdom = self.occGrid.getGridCoordinates(translation[0], translation[1])
-        print('Current value of', robotOdom[0], robotOdom[1], ': ', self.occGrid.cellAt(robotOdom[0], robotOdom[1])) # TODO: Temp
 
         frontiers = self.occGrid.getWavefrontPoints(robotOdom[0], robotOdom[1])
         print('Number of frontiers: ', len(frontiers)) # TODO: Temp
@@ -803,14 +827,13 @@ class RobotDog: # Jordan and Julian
             pointMessage.y = odomPoint[1]
             pointMessage.z = 0
             pointCloudMessage.points.append(pointMessage)
-            print('pointCloud item: ', pointMessage.x, pointMessage.y) # TODO: Temp
         
         self.pointCloudPub.publish(pointCloudMessage)
-        print('Done getFrontiers') # TODO: Temp
         
     def main(self):
         """
         Driver function
+        Author: Eric Lu
         """
         rate = rospy.Rate(FREQUENCY)
 
@@ -835,19 +858,20 @@ class RobotDog: # Jordan and Julian
                     del self.frontierCenters[randIdx]
                     
                     nextPoseArray = self.planPath(gridPoint, True)
-                    if not nextPoseArray == None:
-                        print('length of nextPoseArray: ', len(nextPoseArray.poses)) # TODO: Temp
-                    else:
-                        print('no nextPoseArray')
                     self.followPath(nextPoseArray) # hook nextTarget
-                    print("goal reached")
+                    if not self.pd_takeover:
+                        print("Goal reached")
                 else:
-                    print('Done frontier navigation.') # TODO: Temp
+                    print('Done frontier navigation. Shutting down.')
                     self.stop()
                     break
 
             rate.sleep()
 
+"""
+Main function
+Author: Eric Lu
+"""
 if __name__ == "__main__":
     rospy.init_node(NODE_NAME)
     
