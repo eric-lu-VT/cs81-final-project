@@ -17,36 +17,28 @@ To download the program to your local PC environment:
 3. `cd ~/catkin_ws/src` and run `catkin_create_pkg cs81-final-project std_msgs rospy` to create a new catkin package with the necessary dependencies
 4. `cd ~/catkin_ws` and run `catkin_make` to update the packages in the catkin workspace
 5. Copy the contents of this repository into the `~/catkin_ws/src/cs81-final-project` directory
-6. `chmod +x robot_dog.py` to grant the Python file executable permissions
+6. `chmod +x group8_final.py` to grant the Python file executable permissions
 7. `apt-get install ros-melodic-nav2d-tutorials` to install the 2D simulator
 8. Run `sudo apt-get install ros-melodic-rviz`
 
-To run the program locally on the PC:
+To run the program locally on your PC:
 
 1. Navigate to your ROS development directory and run `docker-compose up --build`
 2. On a *second* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
 3. Run `source /opt/ros/melodic/setup.bash`
 4. Run `roscore` to start the VNC viewer
 5. On a *third* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
-6. `cd ~/catkin_ws/src` and run `rosrun stage_ros stageros /opt/ros/melodic/share/nav2d_tutorials/world/tutorial.world`
-   - Or `rosrun stage_ros stageros ~/catkin_ws/pa1/PA1.world`
-   - Or `rosrun stage_ros stageros ~/catkin_ws/pa2/2017-02-11-00-31-57.world`
+6. `cd ~/catkin_ws/src`, `export TURTLEBOT3_MODEL=waffle`, and then run `roslaunch turtlebot3_gazebo turtlebot3_world.launch`
 7. On a *fourth* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
 8. `cd ~/catkin_ws/src` and run `rviz`
 9. Open your web browser to `localhost:8080/vnc.html` and click connect.
-10. On rviz: Go to "panels" in the menu bar, then hit add new panel, then hit tool properties. This should bring up a sidebar to the left.
-11. In the left sidebar, click Global Options > Fixed Frame > change to "odom"
-12. In the left sidebar, click add > By display type > Map. Then change its topic name to "map"
-13. In the left sidebar, click add > By display type > PointCloud. Then change its topic name to "point_cloud", and size to 0.25 m (so that it can be more easily seen in rviz)
-14. On a *fifth* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
-15. `cd ~/catkin_ws/src` and run `rosrun cs77-final-project robot_dog.py`
-16. The robot should now be moving in the VNC viewer on the browser, and there should also be a OccupancyGrid mapping in the rviz.
-   - To see the OccupancyGrid mapping, you may need to change the focal point (on the right sidebar in rviz)
-
-### Running gazebo
-1. `roscore`
-2. `rviz`
-3. `export TURTLEBOT3_MODEL=waffle`
-4. `roslaunch turtlebot3_gazebo turtlebot3_world.launch` (THIS IS THE BASIC GAZEBO WORLD)
-5. `roslaunch turtlebot3_gazebo turtlebot3_empty_world.launch` (THIS IS THE EMPTY WORLD I CREATED)
-`rosrun cs77-final-project camera3.py`
+10. In gazebo: add a sphere shape with radius 0.125m and rgba color (1, 0, 0, 1) for ambient, diffuse, specular, and emissive
+11. In gazebo: insert/change the world model to something you want
+   - We used the `turtlebot3_plaza` and `turtlebot3_square` from `opt/ros/melodic/share/turtlebot3_gazebo/models`
+12. On rviz: Go to "panels" in the menu bar, then hit add new panel, then hit tool properties. This should bring up a sidebar to the left.
+13. On rviz: In the left sidebar, click Global Options > Fixed Frame > change to "odom"
+14. On rviz: In the left sidebar, click add > By display type > Map. Then change its topic name to "map"
+15. On rviz: In the left sidebar, click add > By display type > PointCloud. Then change its topic name to "point_cloud", and size to 0.25 m (so that it can be more easily seen in rviz)
+16. On a *fifth* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
+17. `cd ~/catkin_ws/src` and run `rosrun cs81-final-project group8_final.py`
+18. The robot should now be moving in the VNC viewer on the browser, there should be OccupancyGrid mapping + PointCloud visualizations in the rviz, and there should be a cv2 camera display in gazebo.
