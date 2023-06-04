@@ -30,7 +30,7 @@ DEFAULT_SCAN_TOPIC = 'scan' # name of topic for Stage simulator. For Gazebo, 'sc
 # DEFAULT_SCAN_TOPIC = 'scan' # name of topic for Stage simulator. For Gazebo, 'scan', simulation is base_scan
 DEFAULT_MAP_TOPIC = 'map'
 DEFAULT_ODOM_FRAME = 'odom'
-DEFAULT_BASE_FRAME = 'base_link' # base_footprint
+DEFAULT_BASE_FRAME = 'base_footprint' # base_footprint
 # DEFAULT_LASER_FRAME = 'base_scan' # this is only for real robot
 DEFAULT_LASER_FRAME = 'base_laser_link' # for simulation
 # Movement publisher
@@ -64,13 +64,13 @@ ROBOT_SIZE = 0.2 # roughly .2m for turtlebot (defined from tutorial.inc)
 # Grid parameters
 # Max probability in occupancy grid (by ros specs.) Representing a wall/obstacle
 OCCUPANCY_GRID_OCCUPIED = 100
-# Min probability in occupancy grid (by ros specs.) Representing free space
+# Min probability in occupancy 5grid (by ros specs.) Representing free space
 OCCUPANCY_GRID_FREE_SPACE = 0
 OCCUPANCY_GRID_UNKNOWN = -1  # Representing unseen cell in occupancy grid
 GRID_WIDTH_M = 150.0 # width of the grid in meters
 GRID_HEIGHT_M = 150.0 # height of the grid in meters
 GRID_RESOLUTION = 0.05 # resolution of the grid in meters/cell
-MIN_FRONTIER_SIZE = 50 # wrt map reference frame
+MIN_FRONTIER_SIZE = 5 # wrt map reference frame
 CLOSE_DIST_THRESHOLD = 15 # wrt odom reference frame, maximum distance (in m) between points to consider them the "same"
 
 # states
@@ -101,24 +101,30 @@ class Grid:
     def getOccupancyGridMsg(self):
         """Return the occupancy grid as a ROS OccupancyGrid message."""
         # create the message
+        print('in getOccupancyGrid 0')
         msg = OccupancyGrid()
-
+        print('in getOccupancyGrid 1')
+        
         # fill in the metadata
         msg.header = Header()
         msg.header.stamp = rospy.Time.now()
         # our map's base frame is actually odom, not map
         msg.header.frame_id = DEFAULT_ODOM_FRAME
+        print('in getOccupancyGrid 2')
 
         msg.info = MapMetaData()
         msg.info.width = self.width
         msg.info.height = self.height
         msg.info.resolution = self.resolution
         msg.info.origin = self.originPose
+        print('in getOccupancyGrid 3')
 
         # convert the grid to a 1D array and fill in the data
         # row-major order (C-style, which is the default for np and the
         # OccupancyGrid message's expected format)
+        print('in getOccupancyGrid 4')
         msg.data = self.grid.flatten()
+        print('in getOccupancyGrid 5')
 
         return msg
 
@@ -229,6 +235,7 @@ class Grid:
                 frontier_open_list[p] = p # mark p as " Frontier -Open - List "
 
                 while len(queue_frontier) > 0: # while queue_f is not empty:
+
                     q = queue_frontier.pop(0) # q gets DEQUEUE ( queue_f )
                     # print('q: ', q, self.cellAt(q[0], q[1]))
                     if q in map_close_list or q in frontier_close_list: # if q is marked as {"Map -Close - List "," Frontier -Close - List "}:
@@ -248,6 +255,7 @@ class Grid:
                     frontier_close_list[q] = q # mark q as frontier close list
                         
                 if len(new_frontier) > MIN_FRONTIER_SIZE:
+                    print('new_frontier: ', new_frontier)
                     contiguous_frontiers.append(new_frontier) # save data of NewFrontier, but only if it is large enough
                 for pt in new_frontier:
                     map_close_list[pt] = pt # mark all points of NewFrontier as "Map -Close - List"
@@ -894,8 +902,9 @@ class RobotDog:
 
                 # publish it
                 msg = self.occGrid.getOccupancyGridMsg()
-                self.occGridPub.publish(msg)
                 print('here4')
+                # self.occGridPub.publish(msg)
+                print('here5')
                 self.getFrontiers()
             
             if len(self.frontierCenters) > 0:
