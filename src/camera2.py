@@ -212,7 +212,7 @@ class Camera():
                     else:
                         self.move(0, -ANGULAR_VELOCITY)
                 elif self.distance_from_ball >= 0.2:
-                    print("Moving")
+                    # print("Moving")
                     self.move(LINEAR_VELOCITY, 0)  
                     self.getDistanceFromBall(contours)             
                 else:

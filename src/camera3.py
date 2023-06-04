@@ -26,11 +26,11 @@ import tf
 CAMERA_TOPIC = "/camera/rgb/image_raw"
 CMD_VEL_TOPIC = "cmd_vel"
 # TODO: Not sure the difference in scan topic between Stage and Gazebo simulator???
-DEFAULT_SCAN_TOPIC = 'base_scan' # name of topic for Stage simulator. For Gazebo, 'scan', simulation is base_scan
+DEFAULT_SCAN_TOPIC = 'scan' # name of topic for Stage simulator. For Gazebo, 'scan', simulation is base_scan
 # DEFAULT_SCAN_TOPIC = 'scan' # name of topic for Stage simulator. For Gazebo, 'scan', simulation is base_scan
 DEFAULT_MAP_TOPIC = 'map'
 DEFAULT_ODOM_FRAME = 'odom'
-DEFAULT_BASE_FRAME = 'base_link'
+DEFAULT_BASE_FRAME = 'base_footprint' # base_footprint
 # DEFAULT_LASER_FRAME = 'base_scan' # this is only for real robot
 DEFAULT_LASER_FRAME = 'base_laser_link' # for simulation
 # Movement publisher
@@ -64,14 +64,14 @@ ROBOT_SIZE = 0.2 # roughly .2m for turtlebot (defined from tutorial.inc)
 # Grid parameters
 # Max probability in occupancy grid (by ros specs.) Representing a wall/obstacle
 OCCUPANCY_GRID_OCCUPIED = 100
-# Min probability in occupancy grid (by ros specs.) Representing free space
+# Min probability in occupancy 5grid (by ros specs.) Representing free space
 OCCUPANCY_GRID_FREE_SPACE = 0
 OCCUPANCY_GRID_UNKNOWN = -1  # Representing unseen cell in occupancy grid
 GRID_WIDTH_M = 150.0 # width of the grid in meters
 GRID_HEIGHT_M = 150.0 # height of the grid in meters
 GRID_RESOLUTION = 0.05 # resolution of the grid in meters/cell
-MIN_FRONTIER_SIZE = 50 # wrt map reference frame
-CLOSE_DIST_THRESHOLD = 15 # wrt odom reference frame, maximum distance (in m) between points to consider them the "same"
+MIN_FRONTIER_SIZE = 5 # wrt map reference frame
+CLOSE_DIST_THRESHOLD = 1 # wrt odom reference frame, maximum distance (in m) between points to consider them the "same"
 
 # states
 STATE_IDLE = 0
@@ -101,24 +101,30 @@ class Grid:
     def getOccupancyGridMsg(self):
         """Return the occupancy grid as a ROS OccupancyGrid message."""
         # create the message
+        print('in getOccupancyGrid 0')
         msg = OccupancyGrid()
-
+        print('in getOccupancyGrid 1')
+        
         # fill in the metadata
         msg.header = Header()
         msg.header.stamp = rospy.Time.now()
         # our map's base frame is actually odom, not map
         msg.header.frame_id = DEFAULT_ODOM_FRAME
+        print('in getOccupancyGrid 2')
 
         msg.info = MapMetaData()
         msg.info.width = self.width
         msg.info.height = self.height
         msg.info.resolution = self.resolution
         msg.info.origin = self.originPose
+        print('in getOccupancyGrid 3')
 
         # convert the grid to a 1D array and fill in the data
         # row-major order (C-style, which is the default for np and the
         # OccupancyGrid message's expected format)
+        print('in getOccupancyGrid 4')
         msg.data = self.grid.flatten()
+        print('in getOccupancyGrid 5')
 
         return msg
 
@@ -229,6 +235,7 @@ class Grid:
                 frontier_open_list[p] = p # mark p as " Frontier -Open - List "
 
                 while len(queue_frontier) > 0: # while queue_f is not empty:
+
                     q = queue_frontier.pop(0) # q gets DEQUEUE ( queue_f )
                     # print('q: ', q, self.cellAt(q[0], q[1]))
                     if q in map_close_list or q in frontier_close_list: # if q is marked as {"Map -Close - List "," Frontier -Close - List "}:
@@ -248,6 +255,7 @@ class Grid:
                     frontier_close_list[q] = q # mark q as frontier close list
                         
                 if len(new_frontier) > MIN_FRONTIER_SIZE:
+                    print('new_frontier: ', new_frontier)
                     contiguous_frontiers.append(new_frontier) # save data of NewFrontier, but only if it is large enough
                 for pt in new_frontier:
                     map_close_list[pt] = pt # mark all points of NewFrontier as "Map -Close - List"
@@ -284,7 +292,7 @@ class RobotDog:
         # listener for transforms
         self.tfListener = tf.TransformListener()
         self.image_sub = rospy.Subscriber(CAMERA_TOPIC, Image, self._camera_callback)
-        self.odometry = rospy.Subscriber(DEFAULT_ODOM_FRAME, Odometry, self.odom_callback, queue_size=1)
+        self._odom_sub = rospy.Subscriber(DEFAULT_ODOM_FRAME, Odometry, self._odom_callback, queue_size=1)
         
         """Robot Parameters"""
         self.angularVel = ANGULAR_VELOCITY
@@ -301,7 +309,7 @@ class RobotDog:
         GRID_RESOLUTION, originPose)
 
         self.laserMsg = None # the most recent laser message, type LaserScan
-        self.freshLaser = False # flag to indicate if we have a new laser message
+        self.freshLaser = True # flag to indicate if we have a new laser message
 
         self.trans = None # most recent translation from odom to base_link
         self.rot = None # most recent rotation from odom to base_link
@@ -364,19 +372,20 @@ class RobotDog:
             self.distance_from_ball = min(min1, min2)
 
             # self.distance_from_ball = min(front_half)
-            print("distance from ball with laser: ", self.distance_from_ball)
+            # print("distance from ball with laser: ", self.distance_from_ball)
             self.pd_controller()
 
     def pd_controller(self):
         # Travel to the ball if not already there
+        # print('In pd_controller')
         if not self.reached_ball:
-            print("BALL TOO FAR")
+            # print("BALL TOO FAR")
             # self.x_error = self.ball_x - (self.odometry_x + self.ball_offset)
             # self.y_error = self.ball_y - (self.odometry_y + self.ball_offset)
             self.x_error = self.distance_from_ball
             self.y_error = 0
-            print("x_error:", self.x_error)
-            print("y_error:", self.y_error)
+            # print("x_error:", self.x_error)
+            # print("y_error:", self.y_error)
             self.distance_to_ball = math.sqrt(self.x_error**2 + self.y_error**2)
             if self.distance_to_ball < self.threshold_distance: # we have arrived at the ball
                 self.reached_ball = True
@@ -413,7 +422,7 @@ class RobotDog:
         # Move the robot forward with the given linear velocity and calculated angular velocity
         self.move(self.linearVel, w)
     
-    def odom_callback(self, msg):
+    def _odom_callback(self, msg):
         # Get x, y from odom and calculate theta
         self.odometry_x = msg.pose.pose.position.x
         self.odometry_y = msg.pose.pose.position.y
@@ -459,7 +468,7 @@ class RobotDog:
             
                 # Make sure there isn't division by 0
                 if M["m00"] != 0:
-                    print("here")
+                    # print("here")
                     cx = int(M["m10"] / M["m00"])
                     cy = int(M["m01"] / M["m00"])
                 else:
@@ -491,7 +500,9 @@ class RobotDog:
                     self.pd_takeover = True
             else:
                 # print("DID NOT DETECT CONTOUR")
-                self.move(0, ANGULAR_VELOCITY)
+                # self.move(0, ANGULAR_VELOCITY)
+                temp = 0
+                
 
             # Show image
             cv2.imshow('window', image)
@@ -621,6 +632,11 @@ class RobotDog:
         current data from the laser sensor using the Bresenham
         Line Algorithm/Ray Tracing."""
         
+        print('Starting fillOccupancyGrid....')
+        while self.trans == None:
+            temp = 0
+        
+        print('Got trans')
         # from base frame to odom coordinates
         t = tf.transformations.translation_matrix(self.trans)
         R = tf.transformations.quaternion_matrix(self.rot)
@@ -631,7 +647,7 @@ class RobotDog:
             validRange = True
             if (r > self.laserMsg.range_max) or (r < self.laserMsg.range_min):
                 validRange = False
-                r = MA
+                r = self.laserMsg.range_max
 
             # get the angle of the laser measurement
             angle = self.laserMsg.angle_min + self.laserMsg.angle_increment * i
@@ -822,6 +838,10 @@ class RobotDog:
         
         path = poseArray.poses
         for i in range(len(path)):
+            if self.pd_takeover:
+                print('PD Takeover')
+                self.stop()
+                break
             # convert pose to be in base_link frame
             (trans, rot) = self.tfListener.lookupTransform(DEFAULT_BASE_FRAME, DEFAULT_ODOM_FRAME, rospy.Time(0))
             t = tf.transformations.translation_matrix(trans)
@@ -836,6 +856,7 @@ class RobotDog:
             # then move the robot to the next pose
             distance = math.sqrt(pose[1]**2 + pose[0]**2)
             self.translate(distance)
+            print('Finished pose ', i)
         
     def getFrontiers(self):
         """
@@ -843,6 +864,7 @@ class RobotDog:
         """
         # get the current position of the robot in the map frame
         # use self.tfListener to get the transform from map to base_link
+        print('here5')
         (translation, rotation) = self.tfListener.lookupTransform(DEFAULT_ODOM_FRAME, DEFAULT_BASE_FRAME, rospy.Time(0))
         robotOdom = self.occGrid.getGridCoordinates(translation[0], translation[1])
         print('Current value of', robotOdom[0], robotOdom[1], ': ', self.occGrid.cellAt(robotOdom[0], robotOdom[1])) # TODO: Temp
@@ -875,31 +897,43 @@ class RobotDog:
 
         while not rospy.is_shutdown():
             # check if we have a new laser message
-            if self.freshLaser:
-                # reset the flag
-                self.freshLaser = False
+            if not self.pd_takeover:
+                print('here1')
+                if self.freshLaser:
+                    print('here2')
+                    # reset the flag
+                    self.freshLaser = False
 
-                # fill the occupancy grid with the current laser data
-                self.fillOccupancyGrid()
+                    # fill the occupancy grid with the current laser data
+                    self.fillOccupancyGrid()
+                    print('here3')
 
-                # publish it
-                msg = self.occGrid.getOccupancyGridMsg()
-                self.occGridPub.publish(msg)
-                self.getFrontiers()
-            
-            if len(self.frontierCenters) > 0:
-                randIdx = np.random.randint(len(self.frontierCenters))
-                (odomPoint, gridPoint) = self.frontierCenters[randIdx]
-                del self.frontierCenters[randIdx]
+                    # publish it
+                    msg = self.occGrid.getOccupancyGridMsg()
+                    print('here4')
+                    self.occGridPub.publish(msg)
+                    print('here5')
+                    self.getFrontiers()
                 
-                nextPoseArray = self.planPath(gridPoint, True)
-                print('length of nextPoseArray: ', len(nextPoseArray.poses)) # TODO: Temp
-                self.followPath(nextPoseArray) # hook nextTarget
-                print("goal reached")
+                if len(self.frontierCenters) > 0:
+                    print('here9')
+                    randIdx = np.random.randint(len(self.frontierCenters))
+                    (odomPoint, gridPoint) = self.frontierCenters[randIdx]
+                    del self.frontierCenters[randIdx]
+                    
+                    nextPoseArray = self.planPath(gridPoint, True)
+                    if not nextPoseArray == None:
+                        print('length of nextPoseArray: ', len(nextPoseArray.poses)) # TODO: Temp
+                    else:
+                        print('no nextPoseArray')
+                    self.followPath(nextPoseArray) # hook nextTarget
+                    print("goal reached")
+                else:
+                    print('Done frontier navigation.') # TODO: Temp
+                    self.stop()
+                    break
             else:
-                print('Done frontier navigation.') # TODO: Temp
-                self.stop()
-                break
+                print('here10')
 
             rate.sleep()
 
@@ -909,6 +943,8 @@ if __name__ == "__main__":
     dog = RobotDog()
     rospy.sleep(2)
     rospy.on_shutdown(dog.stop)
+    
+    print('Running program...')
 
     try:
         dog.main()
