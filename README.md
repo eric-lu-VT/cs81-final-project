@@ -37,7 +37,7 @@ To run the program locally on the PC:
 10. On rviz: Go to "panels" in the menu bar, then hit add new panel, then hit tool properties. This should bring up a sidebar to the left.
 11. In the left sidebar, click Global Options > Fixed Frame > change to "odom"
 12. In the left sidebar, click add > By display type > Map. Then change its topic name to "map"
-13. In the left sidebar, click add > By display type > PointCloud. Then change its topic name to "point_cloud", and size to 1m (so that it can be more easily seen in rviz)
+13. In the left sidebar, click add > By display type > PointCloud. Then change its topic name to "point_cloud", and size to 0.25 m (so that it can be more easily seen in rviz)
 14. On a *fifth* terminal, navigate to your ROS dev directory and enter rosbash with `docker-compose exec ros bash`
 15. `cd ~/catkin_ws/src` and run `rosrun cs77-final-project robot_dog.py`
 16. The robot should now be moving in the VNC viewer on the browser, and there should also be a OccupancyGrid mapping in the rviz.
@@ -45,7 +45,8 @@ To run the program locally on the PC:
 
 ### Running gazebo
 1. `roscore`
-2. `export TURTLEBOT3_MODEL=waffle`
-3. `roslaunch turtlebot3_gazebo turtlebot3_world.launch` (THIS IS THE BASIC GAZEBO WORLD)
-4. `roslaunch turtlebot3_gazebo turtlebot3_empty_world.launch` (THIS IS THE EMPTY WORLD I CREATED)
+2. `rviz`
+3. `export TURTLEBOT3_MODEL=waffle`
+4. `roslaunch turtlebot3_gazebo turtlebot3_world.launch` (THIS IS THE BASIC GAZEBO WORLD)
+5. `roslaunch turtlebot3_gazebo turtlebot3_empty_world.launch` (THIS IS THE EMPTY WORLD I CREATED)
 `rosrun cs77-final-project camera3.py`

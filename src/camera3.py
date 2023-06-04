@@ -71,7 +71,7 @@ GRID_WIDTH_M = 150.0 # width of the grid in meters
 GRID_HEIGHT_M = 150.0 # height of the grid in meters
 GRID_RESOLUTION = 0.05 # resolution of the grid in meters/cell
 MIN_FRONTIER_SIZE = 5 # wrt map reference frame
-CLOSE_DIST_THRESHOLD = 15 # wrt odom reference frame, maximum distance (in m) between points to consider them the "same"
+CLOSE_DIST_THRESHOLD = 1 # wrt odom reference frame, maximum distance (in m) between points to consider them the "same"
 
 # states
 STATE_IDLE = 0
@@ -372,19 +372,20 @@ class RobotDog:
             self.distance_from_ball = min(min1, min2)
 
             # self.distance_from_ball = min(front_half)
-            print("distance from ball with laser: ", self.distance_from_ball)
+            # print("distance from ball with laser: ", self.distance_from_ball)
             self.pd_controller()
 
     def pd_controller(self):
         # Travel to the ball if not already there
+        # print('In pd_controller')
         if not self.reached_ball:
-            print("BALL TOO FAR")
+            # print("BALL TOO FAR")
             # self.x_error = self.ball_x - (self.odometry_x + self.ball_offset)
             # self.y_error = self.ball_y - (self.odometry_y + self.ball_offset)
             self.x_error = self.distance_from_ball
             self.y_error = 0
-            print("x_error:", self.x_error)
-            print("y_error:", self.y_error)
+            # print("x_error:", self.x_error)
+            # print("y_error:", self.y_error)
             self.distance_to_ball = math.sqrt(self.x_error**2 + self.y_error**2)
             if self.distance_to_ball < self.threshold_distance: # we have arrived at the ball
                 self.reached_ball = True
@@ -500,7 +501,8 @@ class RobotDog:
             else:
                 # print("DID NOT DETECT CONTOUR")
                 # self.move(0, ANGULAR_VELOCITY)
-                delay = 0
+                temp = 0
+                
 
             # Show image
             cv2.imshow('window', image)
@@ -836,6 +838,10 @@ class RobotDog:
         
         path = poseArray.poses
         for i in range(len(path)):
+            if self.pd_takeover:
+                print('PD Takeover')
+                self.stop()
+                break
             # convert pose to be in base_link frame
             (trans, rot) = self.tfListener.lookupTransform(DEFAULT_BASE_FRAME, DEFAULT_ODOM_FRAME, rospy.Time(0))
             t = tf.transformations.translation_matrix(trans)
@@ -850,6 +856,7 @@ class RobotDog:
             # then move the robot to the next pose
             distance = math.sqrt(pose[1]**2 + pose[0]**2)
             self.translate(distance)
+            print('Finished pose ', i)
         
     def getFrontiers(self):
         """
@@ -890,37 +897,43 @@ class RobotDog:
 
         while not rospy.is_shutdown():
             # check if we have a new laser message
-            print('here1')
-            if self.freshLaser:
-                print('here2')
-                # reset the flag
-                self.freshLaser = False
+            if not self.pd_takeover:
+                print('here1')
+                if self.freshLaser:
+                    print('here2')
+                    # reset the flag
+                    self.freshLaser = False
 
-                # fill the occupancy grid with the current laser data
-                self.fillOccupancyGrid()
-                print('here3')
+                    # fill the occupancy grid with the current laser data
+                    self.fillOccupancyGrid()
+                    print('here3')
 
-                # publish it
-                msg = self.occGrid.getOccupancyGridMsg()
-                print('here4')
-                # self.occGridPub.publish(msg)
-                print('here5')
-                self.getFrontiers()
-            
-            if len(self.frontierCenters) > 0:
-                print('here9')
-                randIdx = np.random.randint(len(self.frontierCenters))
-                (odomPoint, gridPoint) = self.frontierCenters[randIdx]
-                del self.frontierCenters[randIdx]
+                    # publish it
+                    msg = self.occGrid.getOccupancyGridMsg()
+                    print('here4')
+                    self.occGridPub.publish(msg)
+                    print('here5')
+                    self.getFrontiers()
                 
-                nextPoseArray = self.planPath(gridPoint, True)
-                print('length of nextPoseArray: ', len(nextPoseArray.poses)) # TODO: Temp
-                self.followPath(nextPoseArray) # hook nextTarget
-                print("goal reached")
+                if len(self.frontierCenters) > 0:
+                    print('here9')
+                    randIdx = np.random.randint(len(self.frontierCenters))
+                    (odomPoint, gridPoint) = self.frontierCenters[randIdx]
+                    del self.frontierCenters[randIdx]
+                    
+                    nextPoseArray = self.planPath(gridPoint, True)
+                    if not nextPoseArray == None:
+                        print('length of nextPoseArray: ', len(nextPoseArray.poses)) # TODO: Temp
+                    else:
+                        print('no nextPoseArray')
+                    self.followPath(nextPoseArray) # hook nextTarget
+                    print("goal reached")
+                else:
+                    print('Done frontier navigation.') # TODO: Temp
+                    self.stop()
+                    break
             else:
-                print('Done frontier navigation.') # TODO: Temp
-                self.stop()
-                break
+                print('here10')
 
             rate.sleep()
 
