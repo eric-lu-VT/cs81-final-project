@@ -42,3 +42,10 @@ To run the program locally on the PC:
 15. `cd ~/catkin_ws/src` and run `rosrun cs77-final-project robot_dog.py`
 16. The robot should now be moving in the VNC viewer on the browser, and there should also be a OccupancyGrid mapping in the rviz.
    - To see the OccupancyGrid mapping, you may need to change the focal point (on the right sidebar in rviz)
+
+### Running gazebo
+1. `roscore`
+2. `export TURTLEBOT3_MODEL=waffle`
+3. `roslaunch turtlebot3_gazebo turtlebot3_world.launch` (THIS IS THE BASIC GAZEBO WORLD)
+4. `roslaunch turtlebot3_gazebo turtlebot3_empty_world.launch` (THIS IS THE EMPTY WORLD I CREATED)
+`rosrun cs77-final-project camera3.py`

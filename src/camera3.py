@@ -26,11 +26,11 @@ import tf
 CAMERA_TOPIC = "/camera/rgb/image_raw"
 CMD_VEL_TOPIC = "cmd_vel"
 # TODO: Not sure the difference in scan topic between Stage and Gazebo simulator???
-DEFAULT_SCAN_TOPIC = 'base_scan' # name of topic for Stage simulator. For Gazebo, 'scan', simulation is base_scan
+DEFAULT_SCAN_TOPIC = 'scan' # name of topic for Stage simulator. For Gazebo, 'scan', simulation is base_scan
 # DEFAULT_SCAN_TOPIC = 'scan' # name of topic for Stage simulator. For Gazebo, 'scan', simulation is base_scan
 DEFAULT_MAP_TOPIC = 'map'
 DEFAULT_ODOM_FRAME = 'odom'
-DEFAULT_BASE_FRAME = 'base_link'
+DEFAULT_BASE_FRAME = 'base_link' # base_footprint
 # DEFAULT_LASER_FRAME = 'base_scan' # this is only for real robot
 DEFAULT_LASER_FRAME = 'base_laser_link' # for simulation
 # Movement publisher
@@ -284,7 +284,7 @@ class RobotDog:
         # listener for transforms
         self.tfListener = tf.TransformListener()
         self.image_sub = rospy.Subscriber(CAMERA_TOPIC, Image, self._camera_callback)
-        self.odometry = rospy.Subscriber(DEFAULT_ODOM_FRAME, Odometry, self.odom_callback, queue_size=1)
+        self._odom_sub = rospy.Subscriber(DEFAULT_ODOM_FRAME, Odometry, self._odom_callback, queue_size=1)
         
         """Robot Parameters"""
         self.angularVel = ANGULAR_VELOCITY
@@ -301,7 +301,7 @@ class RobotDog:
         GRID_RESOLUTION, originPose)
 
         self.laserMsg = None # the most recent laser message, type LaserScan
-        self.freshLaser = False # flag to indicate if we have a new laser message
+        self.freshLaser = True # flag to indicate if we have a new laser message
 
         self.trans = None # most recent translation from odom to base_link
         self.rot = None # most recent rotation from odom to base_link
@@ -413,7 +413,7 @@ class RobotDog:
         # Move the robot forward with the given linear velocity and calculated angular velocity
         self.move(self.linearVel, w)
     
-    def odom_callback(self, msg):
+    def _odom_callback(self, msg):
         # Get x, y from odom and calculate theta
         self.odometry_x = msg.pose.pose.position.x
         self.odometry_y = msg.pose.pose.position.y
@@ -459,7 +459,7 @@ class RobotDog:
             
                 # Make sure there isn't division by 0
                 if M["m00"] != 0:
-                    print("here")
+                    # print("here")
                     cx = int(M["m10"] / M["m00"])
                     cy = int(M["m01"] / M["m00"])
                 else:
@@ -491,7 +491,8 @@ class RobotDog:
                     self.pd_takeover = True
             else:
                 # print("DID NOT DETECT CONTOUR")
-                self.move(0, ANGULAR_VELOCITY)
+                # self.move(0, ANGULAR_VELOCITY)
+                delay = 0
 
             # Show image
             cv2.imshow('window', image)
@@ -621,6 +622,11 @@ class RobotDog:
         current data from the laser sensor using the Bresenham
         Line Algorithm/Ray Tracing."""
         
+        print('Starting fillOccupancyGrid....')
+        while self.trans == None:
+            temp = 0
+        
+        print('Got trans')
         # from base frame to odom coordinates
         t = tf.transformations.translation_matrix(self.trans)
         R = tf.transformations.quaternion_matrix(self.rot)
@@ -631,7 +637,7 @@ class RobotDog:
             validRange = True
             if (r > self.laserMsg.range_max) or (r < self.laserMsg.range_min):
                 validRange = False
-                r = MA
+                r = self.laserMsg.range_max
 
             # get the angle of the laser measurement
             angle = self.laserMsg.angle_min + self.laserMsg.angle_increment * i
@@ -843,6 +849,7 @@ class RobotDog:
         """
         # get the current position of the robot in the map frame
         # use self.tfListener to get the transform from map to base_link
+        print('here5')
         (translation, rotation) = self.tfListener.lookupTransform(DEFAULT_ODOM_FRAME, DEFAULT_BASE_FRAME, rospy.Time(0))
         robotOdom = self.occGrid.getGridCoordinates(translation[0], translation[1])
         print('Current value of', robotOdom[0], robotOdom[1], ': ', self.occGrid.cellAt(robotOdom[0], robotOdom[1])) # TODO: Temp
@@ -875,19 +882,24 @@ class RobotDog:
 
         while not rospy.is_shutdown():
             # check if we have a new laser message
+            print('here1')
             if self.freshLaser:
+                print('here2')
                 # reset the flag
                 self.freshLaser = False
 
                 # fill the occupancy grid with the current laser data
                 self.fillOccupancyGrid()
+                print('here3')
 
                 # publish it
                 msg = self.occGrid.getOccupancyGridMsg()
                 self.occGridPub.publish(msg)
+                print('here4')
                 self.getFrontiers()
             
             if len(self.frontierCenters) > 0:
+                print('here9')
                 randIdx = np.random.randint(len(self.frontierCenters))
                 (odomPoint, gridPoint) = self.frontierCenters[randIdx]
                 del self.frontierCenters[randIdx]
@@ -909,6 +921,8 @@ if __name__ == "__main__":
     dog = RobotDog()
     rospy.sleep(2)
     rospy.on_shutdown(dog.stop)
+    
+    print('Running program...')
 
     try:
         dog.main()

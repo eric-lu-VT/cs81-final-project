@@ -431,7 +431,7 @@ class RobotDog:
 			validRange = True
 			if (r > self.laserMsg.range_max) or (r < self.laserMsg.range_min):
 				validRange = False
-				r = MA
+				r = self.laserMsg.range_max
 
 			# get the angle of the laser measurement
 			angle = self.laserMsg.angle_min + self.laserMsg.angle_increment * i
